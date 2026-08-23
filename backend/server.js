@@ -102,7 +102,20 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false
 }));
 
-app.use(cors());
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()) 
+    : ['http://localhost:5173', 'http://localhost:5000', 'https://krishiv.co', 'https://www.krishiv.co'];
+
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+            callback(null, true);
+        } else {
+            callback(new Error('CORS Policy Exception: Origin not allowed.'));
+        }
+    },
+    credentials: true
+}));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
@@ -217,19 +230,19 @@ app.use('/api/admin/', adminLimiter);
 // Helper Functions for Password Security & Hashing
 function hashPassword(password) {
     const salt = crypto.randomBytes(16).toString('hex');
-    const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+    const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
     return { salt, hash };
 }
 
 function verifyPassword(password, salt, hash) {
     if (!salt || !hash) return false;
-    const verifyHash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+    const verifyHash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
     return verifyHash === hash;
 }
 
 // Cryptographically Secure OTP Generation & Hashing
 function generateSecureOtp() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return crypto.randomInt(100000, 1000000).toString();
 }
 
 function hashOtp(otp) {
@@ -1109,8 +1122,10 @@ app.post('/api/auth/signup/verify-otp', async (req, res) => {
     }
 
     const inputHash = hashOtp(otp);
+    const inputBuffer = Buffer.from(inputHash);
+    const targetBuffer = Buffer.from(record.otpHash);
 
-    if (record.otpHash !== inputHash) {
+    if (inputBuffer.length !== targetBuffer.length || !crypto.timingSafeEqual(inputBuffer, targetBuffer)) {
         record.attempts += 1;
         return res.status(400).json({ error: 'Invalid verification code. Please check and try again.' });
     }
@@ -2325,7 +2340,11 @@ app.post('/api/payment/verify-razorpay', async (req, res) => {
 // 6.5. Get User Orders
 app.get('/api/orders/:userId', async (req, res) => {
     const { userId } = req.params;
-    const { email, phone, name } = req.query;
+    const { email, phone, name, requestingUserId } = req.query;
+
+    if (requestingUserId && userId && userId !== 'guest' && String(requestingUserId) !== String(userId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to view these orders.' });
+    }
 
     let dbOrders = [];
     if (isMongoConnected) {
@@ -2401,6 +2420,7 @@ app.get('/api/order/:orderId', async (req, res) => {
 // 6.7. Cancel Order (Restock inventory + DB update + status notification)
 app.put('/api/orders/:orderId/cancel', async (req, res) => {
     const { orderId } = req.params;
+    const { userId } = req.body || {};
     const cancelledAt = new Date().toISOString();
 
     const foundOrder = mockOrders.find(order => order.id === orderId);
@@ -2416,6 +2436,10 @@ app.put('/api/orders/:orderId/cancel', async (req, res) => {
 
     if (!targetOrder) {
         return res.status(404).json({ error: 'Order not found' });
+    }
+
+    if (userId && targetOrder.user_id && targetOrder.user_id !== 'guest' && String(targetOrder.user_id) !== String(userId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to cancel this order.' });
     }
 
     if (targetOrder.status === 'cancelled') {
@@ -2483,11 +2507,11 @@ app.post('/api/feedback', (req, res) => {
 // ====================================================
 
 let mockAdminUsers = [
-    { id: 'admin-1', name: 'Krishiv Admin', email: 'krishivcorporation4513@gmail.com', password: 'admin123', role: 'Super Admin', avatar: '/images/admin_avatar.png' },
-    { id: 'admin-1b', name: 'Krishiv Admin Alt', email: 'admin@krishiv.co', password: 'admin123', role: 'Super Admin', avatar: '/images/admin_avatar.png' },
-    { id: 'admin-2', name: 'Rajesh Sharma', email: 'manager@krishiv.co', password: 'manager123', role: 'Manager', avatar: '' },
-    { id: 'admin-3', name: 'Priya Patel', email: 'inventory@krishiv.co', password: 'inv123', role: 'Inventory Manager', avatar: '' },
-    { id: 'admin-4', name: 'Ananya Verma', email: 'support@krishiv.co', password: 'support123', role: 'Customer Support', avatar: '' }
+    { id: 'admin-1', name: 'Krishiv Admin', email: 'krishivcorporation4513@gmail.com', password: process.env.SUPER_ADMIN_PASSWORD || 'admin123', role: 'Super Admin', avatar: '/images/admin_avatar.png' },
+    { id: 'admin-1b', name: 'Krishiv Admin Alt', email: 'admin@krishiv.co', password: process.env.SUPER_ADMIN_PASSWORD || 'admin123', role: 'Super Admin', avatar: '/images/admin_avatar.png' },
+    { id: 'admin-2', name: 'Rajesh Sharma', email: 'manager@krishiv.co', password: process.env.ADMIN_MANAGER_PASSWORD || 'manager123', role: 'Manager', avatar: '' },
+    { id: 'admin-3', name: 'Priya Patel', email: 'inventory@krishiv.co', password: process.env.ADMIN_INV_PASSWORD || 'inv123', role: 'Inventory Manager', avatar: '' },
+    { id: 'admin-4', name: 'Ananya Verma', email: 'support@krishiv.co', password: process.env.ADMIN_SUPPORT_PASSWORD || 'support123', role: 'Customer Support', avatar: '' }
 ];
 
 let mockCategories = [
@@ -2989,7 +3013,7 @@ app.get('/api/admin/orders', requireAdminAuth, async (req, res) => {
     return res.json({ success: true, orders: ordersList });
 });
 
-app.put('/api/admin/orders/:id/status', async (req, res) => {
+app.put('/api/admin/orders/:id/status', requireAdminAuth, async (req, res) => {
     const { id } = req.params;
     const { status, trackingId, tracking_id, courier, trackingUrl } = req.body;
     const finalTrackingId = trackingId || tracking_id || '';
