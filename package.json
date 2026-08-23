@@ -1,0 +1,23 @@
+{
+  "name": "krishiv-corporation-ecommerce",
+  "version": "1.0.0",
+  "description": "Krishiv Corporation E-Commerce Platform — 100% Organic Beauty & Skincare",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "build": "npm run build --prefix frontend",
+    "postinstall": "npm install --prefix backend && npm install --prefix frontend",
+    "dev": "npm start --prefix backend"
+  },
+  "keywords": [
+    "ecommerce",
+    "krishiv",
+    "organic",
+    "react",
+    "express",
+    "mongodb",
+    "razorpay"
+  ],
+  "author": "Krishiv Corporation",
+  "license": "ISC"
+}
