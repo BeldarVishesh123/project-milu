@@ -2492,15 +2492,82 @@ app.put('/api/orders/:orderId/cancel', async (req, res) => {
     return res.json({ success: true, message: 'Order cancelled successfully', order: targetOrder });
 });
 
-// 7. Customer Care Feedback Form
-app.post('/api/feedback', (req, res) => {
+// 7. Customer Care Feedback Form (Sends Email Notification to Admin)
+app.post('/api/feedback', async (req, res) => {
     const { name, email, subject, message } = req.body;
     if (!name || !email || !message) {
         return res.status(400).json({ error: 'Name, email, and message are required' });
     }
     const feedback = { id: `feedback-${Date.now()}`, name, email, subject, message, date: new Date().toISOString() };
     mockFeedback.push(feedback);
-    return res.json({ success: true, message: 'Feedback submitted successfully' });
+
+    // Dispatch real-time Customer Support email notification to admin inbox
+    try {
+        const { transporter } = await getEmailTransporter();
+        const adminEmail = process.env.SMTP_USER || 'krishivcorporation4513@gmail.com';
+        const fromHeader = process.env.EMAIL_FROM || '"Krishiv Customer Support" <krishivcorporation4513@gmail.com>';
+
+        const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; color: #0f172a; }
+                .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+                .header { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 28px; text-align: center; color: #ffffff; }
+                .badge { background: #3b82f6; color: #ffffff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+                .content { padding: 28px; }
+                .section { background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 20px; border: 1px solid #e2e8f0; }
+                .message-box { background: #faf7ee; border-left: 4px solid #b9892e; padding: 16px; border-radius: 8px; font-size: 14px; line-height: 1.6; color: #221d16; margin-top: 12px; }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <div class="header">
+                    <span class="badge">Customer Support Inquiry</span>
+                    <h2 style="margin: 12px 0 4px; font-size: 22px;">Krishiv Care Desk</h2>
+                    <p style="margin: 0; font-size: 13px; opacity: 0.8;">New Message Received from Customer</p>
+                </div>
+                <div class="content">
+                    <div class="section">
+                        <p style="margin: 4px 0; font-size: 13.5px;"><strong>Customer Name:</strong> ${name}</p>
+                        <p style="margin: 4px 0; font-size: 13.5px;"><strong>Email Address:</strong> <a href="mailto:${email}">${email}</a></p>
+                        <p style="margin: 4px 0; font-size: 13.5px;"><strong>Subject:</strong> ${subject || 'General Inquiry'}</p>
+                    </div>
+
+                    <div style="margin-top: 20px;">
+                        <strong style="font-size: 13px; color: #64748b; text-transform: uppercase;">Message Content:</strong>
+                        <div class="message-box">
+                            ${message.replace(/\n/g, '<br/>')}
+                        </div>
+                    </div>
+
+                    <div style="text-align: center; margin-top: 28px;">
+                        <a href="mailto:${email}?subject=Re:%20${encodeURIComponent(subject || 'Krishiv Support Response')}" style="background: #8f8269; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 10px; font-weight: 700; font-size: 13px; display: inline-block;">
+                            Reply to Customer (${email}) →
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        `;
+
+        await transporter.sendMail({
+            from: fromHeader,
+            to: adminEmail,
+            replyTo: email,
+            subject: `📩 [CUSTOMER CARE] ${subject || 'Inquiry'} from ${name}`,
+            text: `Customer Support Message:\n\nName: ${name}\nEmail: ${email}\nSubject: ${subject || 'Inquiry'}\n\nMessage:\n${message}`,
+            html: htmlContent
+        });
+        console.log(`[SMTP SUCCESS] Customer support inquiry email sent to ${adminEmail} from ${email}`);
+    } catch (err) {
+        console.error('[SMTP ERROR] Failed to send customer support email:', err.message);
+    }
+
+    return res.json({ success: true, message: 'Your support message has been submitted and emailed to our support team!' });
 });
 
 // ====================================================
