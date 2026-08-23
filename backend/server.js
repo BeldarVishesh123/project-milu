@@ -3349,6 +3349,19 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// SEO Crawlability Routes for Search Engines
+app.get('/robots.txt', (req, res) => {
+    const robotsPath = path.join(__dirname, '../frontend/public/robots.txt');
+    if (fs.existsSync(robotsPath)) return res.sendFile(robotsPath);
+    res.type('text/plain').send("User-agent: *\nAllow: /\nSitemap: https://krishivcorporation.ltd/sitemap.xml");
+});
+
+app.get('/sitemap.xml', (req, res) => {
+    const sitemapPath = path.join(__dirname, '../frontend/public/sitemap.xml');
+    if (fs.existsSync(sitemapPath)) return res.sendFile(sitemapPath);
+    res.type('text/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://krishivcorporation.ltd/</loc></url></urlset>');
+});
+
 // Production Static File Serving (Single-Port Full-Stack Deployment)
 const distPath = path.join(__dirname, '../frontend/dist');
 

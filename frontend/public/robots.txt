@@ -1,0 +1,9 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+Allow: /images/
+Allow: /uploads/
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: https://krishivcorporation.ltd/sitemap.xml

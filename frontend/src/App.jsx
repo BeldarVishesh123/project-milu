@@ -383,6 +383,38 @@ export default function App() {
     }
   }, []);
 
+  // Dynamic SEO Page Title & Meta Description Manager
+  useEffect(() => {
+    let title = "Krishiv Corporation | 100% Pure Organic Skincare & Herbal Powders";
+    let description = "Shop 100% pure organic cosmetics, ayurvedic skincare, Orange Peel Powder, Neem Leaf, Multani Mitti, Rice Powder, Ubtan & Chocolate Wax Powder.";
+
+    if (page === 'product-details' && selectedProduct) {
+      title = `${selectedProduct.name} — Organic ${selectedProduct.category || 'Skincare'} | Krishiv Corporation`;
+      description = `${selectedProduct.name}: ${selectedProduct.description?.substring(0, 150) || 'Pure organic formulation for glowing skin.'} Price: ₹${selectedProduct.price}.`;
+    } else if (page === 'category' || selectedCategory) {
+      const cat = selectedCategory || 'Organic Products';
+      title = `${cat} Collection | Krishiv Corporation`;
+      description = `Explore our pure organic ${cat} range. 100% natural ingredients, no chemicals, fast delivery across India.`;
+    } else if (page === 'checkout') {
+      title = "Checkout & Place Order | Krishiv Corporation";
+    } else if (page === 'terms') {
+      title = "Terms of Service & Statutory Policy | Krishiv Corporation";
+    } else if (page === 'customer-care') {
+      title = "Customer Support & Contact Us | Krishiv Corporation";
+    } else if (page === 'track-order') {
+      title = "Track Your Order | Krishiv Corporation";
+    } else if (page === 'account') {
+      title = "My Account & Orders | Krishiv Corporation";
+    }
+
+    document.title = title;
+    
+    let metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) {
+      metaDesc.setAttribute('content', description);
+    }
+  }, [page, selectedProduct, selectedCategory]);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const initialPage = params.get('page');

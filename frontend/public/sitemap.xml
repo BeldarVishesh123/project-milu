@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  <url>
+    <loc>https://krishivcorporation.ltd/</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://krishivcorporation.ltd/?category=Skin%20Care</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://krishivcorporation.ltd/?category=Body%20Care</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://krishivcorporation.ltd/?page=terms</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://krishivcorporation.ltd/?page=contact</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://krishivcorporation.ltd/?product=1</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <image:image>
+      <image:loc>https://krishivcorporation.ltd/images/orange_peel.png</image:loc>
+      <image:title>Orange Peel Powder - Brightening</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://krishivcorporation.ltd/?product=2</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <image:image>
+      <image:loc>https://krishivcorporation.ltd/images/neem_leaf.png</image:loc>
+      <image:title>Neem Leaf Powder - Purifying</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://krishivcorporation.ltd/?product=3</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <image:image>
+      <image:loc>https://krishivcorporation.ltd/images/multani_mitti.png</image:loc>
+      <image:title>Multani Mitti Clay - Detoxifying</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://krishivcorporation.ltd/?product=4</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <image:image>
+      <image:loc>https://krishivcorporation.ltd/images/rice_powder.png</image:loc>
+      <image:title>Rice Powder - Soothing Exfoliant</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://krishivcorporation.ltd/?product=5</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <image:image>
+      <image:loc>https://krishivcorporation.ltd/images/ubtan_powder.png</image:loc>
+      <image:title>Ubtan Powder - Radiance Complexion</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://krishivcorporation.ltd/?product=6</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <image:image>
+      <image:loc>https://krishivcorporation.ltd/images/chocolate_wax_powder.png</image:loc>
+      <image:title>Chocolate Wax Powder - Painless Hair Removal</image:title>
+    </image:image>
+  </url>
+</urlset>
