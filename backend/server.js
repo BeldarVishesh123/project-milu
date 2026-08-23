@@ -3272,7 +3272,11 @@ if (fs.existsSync(distPath)) {
     });
 }
 
-// Start Server
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+// Start Server (Standalone Node.js or Vercel Serverless)
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+}
+
+module.exports = app;
