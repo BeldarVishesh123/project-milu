@@ -1,14 +1,5 @@
 {
   "version": 2,
-  "services": {
-    "frontend": {
-      "root": "frontend",
-      "framework": "vite"
-    },
-    "backend": {
-      "root": "backend"
-    }
-  },
   "builds": [
     {
       "src": "frontend/package.json",
@@ -21,16 +12,16 @@
   ],
   "routes": [
     {
-      "source": "/api/(.*)",
-      "destination": "backend/server.js"
+      "src": "/api/(.*)",
+      "dest": "backend/server.js"
     },
     {
-      "source": "/uploads/(.*)",
-      "destination": "backend/server.js"
+      "src": "/uploads/(.*)",
+      "dest": "backend/server.js"
     },
     {
-      "source": "/(.*)",
-      "destination": "frontend/$1"
+      "src": "/(.*)",
+      "dest": "frontend/$1"
     }
   ]
 }
