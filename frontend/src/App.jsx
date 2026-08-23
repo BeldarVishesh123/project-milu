@@ -1250,10 +1250,16 @@ export default function App() {
         };
 
         if (window.Razorpay) {
+          options.modal = {
+            ondismiss: function () {
+              console.log('Razorpay Checkout Modal Dismissed by user.');
+              showToast('Payment cancelled. You can retry checkout anytime.');
+            }
+          };
           const rzp = new window.Razorpay(options);
           rzp.on('payment.failed', function (response) {
             console.error('Razorpay Payment Failed:', response.error);
-            showToast(`Payment Failed: ${response.error.description || response.error.reason || 'Transaction cancelled.'}`);
+            showToast(`Payment Failed: ${response.error?.description || response.error?.reason || 'Transaction cancelled.'}`);
           });
           rzp.open();
         } else {

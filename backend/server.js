@@ -28,8 +28,8 @@ if (!fs.existsSync(uploadsDir)) {
 app.use('/uploads', express.static(uploadsDir));
 
 const razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_TT54OF0mJvt1SP',
-    key_secret: process.env.RAZORPAY_KEY_SECRET || '4T7TYec0s09aOHW2zwVGjuD0'
+    key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_TTFs5Y8XSXB91l',
+    key_secret: process.env.RAZORPAY_KEY_SECRET || 'jn5N1YSC2aEkM1rWKdbGTAMm'
 });
 
 // MongoDB Atlas Connection & Models Configuration
@@ -2067,6 +2067,74 @@ app.post('/api/orders', async (req, res) => {
     });
 });
 
+// Standard Razorpay Endpoints (POST /api/create-order & POST /api/verify-payment)
+app.post('/api/create-order', async (req, res) => {
+    try {
+        const { amount, currency = 'INR', receipt } = req.body;
+        // Amount must be in paise, minimum 100 paise (₹1.00)
+        let amountInPaise = parseInt(amount, 10);
+        if (isNaN(amountInPaise) || amountInPaise < 100) {
+            return res.status(400).json({ error: 'Minimum order amount is 100 paise (₹1.00).' });
+        }
+
+        const options = {
+            amount: amountInPaise,
+            currency: currency || 'INR',
+            receipt: receipt || `rcpt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+        };
+
+        const razorpayOrder = await razorpay.orders.create(options);
+        console.log(`[RAZORPAY SUCCESS] Order created: ${razorpayOrder.id} | Amount: ${amountInPaise} paise`);
+
+        return res.json({
+            success: true,
+            order_id: razorpayOrder.id,
+            id: razorpayOrder.id,
+            amount: razorpayOrder.amount,
+            currency: razorpayOrder.currency,
+            key: process.env.RAZORPAY_KEY_ID || 'rzp_test_TTFs5Y8XSXB91l'
+        });
+    } catch (err) {
+        console.error('[RAZORPAY CREATE ORDER ERROR]', err.message);
+        const statusCode = err.statusCode || 500;
+        return res.status(statusCode).json({ error: 'Failed to create Razorpay order', details: err.message });
+    }
+});
+
+app.post('/api/verify-payment', async (req, res) => {
+    try {
+        const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+        if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+            return res.status(400).json({ error: 'Missing required parameters: razorpay_order_id, razorpay_payment_id, razorpay_signature.' });
+        }
+
+        const keySecret = (process.env.RAZORPAY_KEY_SECRET || 'jn5N1YSC2aEkM1rWKdbGTAMm').trim();
+        const expectedSignature = crypto
+            .createHmac('sha256', keySecret)
+            .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+            .digest('hex');
+
+        const sigBuffer = Buffer.from(razorpay_signature);
+        const expectedBuffer = Buffer.from(expectedSignature);
+
+        if (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
+            console.error(`[RAZORPAY VERIFICATION FAILED] Signature mismatch for Order ${razorpay_order_id}`);
+            return res.status(400).json({ success: false, error: 'Invalid payment signature. Verification failed.' });
+        }
+
+        console.log(`[RAZORPAY VERIFICATION SUCCESS] Verified Order: ${razorpay_order_id} | Txn: ${razorpay_payment_id}`);
+        return res.json({
+            success: true,
+            message: 'Payment verified successfully',
+            order_id: razorpay_order_id,
+            payment_id: razorpay_payment_id
+        });
+    } catch (err) {
+        console.error('[RAZORPAY VERIFY ERROR]', err.message);
+        return res.status(500).json({ error: 'Internal server error during verification', details: err.message });
+    }
+});
+
 // 6.1 Create Razorpay Order (Server-Side Price Calculation & Token Signing)
 app.post('/api/payment/create-razorpay-order', async (req, res) => {
     try {
@@ -2155,7 +2223,7 @@ app.post('/api/payment/verify-razorpay', async (req, res) => {
         }
 
         // Verify Cryptographic HMAC-SHA256 Signature
-        const keySecret = (process.env.RAZORPAY_KEY_SECRET || '4T7TYec0s09aOHW2zwVGjuD0').trim();
+        const keySecret = (process.env.RAZORPAY_KEY_SECRET || 'jn5N1YSC2aEkM1rWKdbGTAMm').trim();
         const generatedSignature = crypto
             .createHmac('sha256', keySecret)
             .update(`${razorpay_order_id}|${razorpay_payment_id}`)
