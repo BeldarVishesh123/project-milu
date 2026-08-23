@@ -893,7 +893,7 @@ if (isSupabaseConfigured) {
     console.log('Supabase credentials not configured. Running in MOCK DATABASE mode.');
 }
 
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || 'dummy-client-id');
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || 'dummy-client-id');
 
 // Seed Mock Products Data
 const mockProducts = [
@@ -1621,7 +1621,7 @@ app.post('/api/auth/google', async (req, res) => {
         return res.status(400).json({ error: 'Token is required' });
     }
 
-    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
     if (!clientId || clientId === 'dummy-client-id' || clientId.includes('your-google-client-id') || clientId.includes('placeholder')) {
         return res.status(400).json({ error: 'Google OAuth configuration is missing on the server. Please set GOOGLE_CLIENT_ID in backend/.env' });
     }
