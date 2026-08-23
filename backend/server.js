@@ -2507,11 +2507,7 @@ app.post('/api/feedback', (req, res) => {
 // ====================================================
 
 let mockAdminUsers = [
-    { id: 'admin-1', name: 'Krishiv Admin', email: 'krishivcorporation4513@gmail.com', password: process.env.SUPER_ADMIN_PASSWORD || 'admin123', role: 'Super Admin', avatar: '/images/admin_avatar.png' },
-    { id: 'admin-1b', name: 'Krishiv Admin Alt', email: 'admin@krishiv.co', password: process.env.SUPER_ADMIN_PASSWORD || 'admin123', role: 'Super Admin', avatar: '/images/admin_avatar.png' },
-    { id: 'admin-2', name: 'Rajesh Sharma', email: 'manager@krishiv.co', password: process.env.ADMIN_MANAGER_PASSWORD || 'manager123', role: 'Manager', avatar: '' },
-    { id: 'admin-3', name: 'Priya Patel', email: 'inventory@krishiv.co', password: process.env.ADMIN_INV_PASSWORD || 'inv123', role: 'Inventory Manager', avatar: '' },
-    { id: 'admin-4', name: 'Ananya Verma', email: 'support@krishiv.co', password: process.env.ADMIN_SUPPORT_PASSWORD || 'support123', role: 'Customer Support', avatar: '' }
+    { id: 'admin-1', name: 'Krishiv Admin', email: 'krishivcorporation4513@gmail.com', password: process.env.SUPER_ADMIN_PASSWORD || 'admin123', role: 'Super Admin', avatar: '/images/admin_avatar.png' }
 ];
 
 let mockCategories = [
