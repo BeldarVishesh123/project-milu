@@ -19,6 +19,7 @@ dotenv.config();
 const app = express();
 app.disable('x-powered-by');
 const PORT = process.env.PORT || 5000;
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://krishivcorporation.ltd';
 const OTP_EXPIRY_MINUTES = parseInt(process.env.OTP_EXPIRY_MINUTES || '10', 10);
 
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -579,7 +580,7 @@ const sendAdminOrderNotificationEmail = async (order) => {
                     </div>
 
                     <div style="text-align: center; margin-top: 24px;">
-                        <a href="http://localhost:5173/admin" style="background: #8f8269; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 10px; font-weight: 700; font-size: 13px; display: inline-block;">
+                        <a href="${FRONTEND_URL}/admin" style="background: #8f8269; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 10px; font-weight: 700; font-size: 13px; display: inline-block;">
                             Manage Order in Admin Panel →
                         </a>
                     </div>
@@ -589,7 +590,7 @@ const sendAdminOrderNotificationEmail = async (order) => {
         </html>
         `;
 
-        const textContent = `New Order Alert!\n\nOrder ID: #${order.id}\nTotal: ₹${order.total}\nPayment Method: ${paymentInfo.method || 'Paid'}\nCustomer: ${shippingInfo.fullName || shippingInfo.name || 'Valued Customer'}\nPhone: ${shippingInfo.phone || 'N/A'}\nAddress: ${shippingInfo.address || ''}, ${shippingInfo.city || ''}\n\nManage in Admin Panel: http://localhost:5173/admin`;
+        const textContent = `New Order Alert!\n\nOrder ID: #${order.id}\nTotal: ₹${order.total}\nPayment Method: ${paymentInfo.method || 'Paid'}\nCustomer: ${shippingInfo.fullName || shippingInfo.name || 'Valued Customer'}\nPhone: ${shippingInfo.phone || 'N/A'}\nAddress: ${shippingInfo.address || ''}, ${shippingInfo.city || ''}\n\nManage in Admin Panel: ${FRONTEND_URL}/admin`;
 
         await transporter.sendMail({
             from: fromHeader,
@@ -848,7 +849,7 @@ const sendOrderDeliveredEmail = async (order) => {
                     <p style="font-size: 14px; line-height: 1.6; color: #475569;">Thank you for shopping with <strong>Krishiv Corporation</strong>. We hope you enjoy your 100% pure organic skincare and body care products!</p>
 
                     <div style="text-align: center; margin-top: 20px;">
-                        <a href="http://localhost:5173" target="_blank" class="btn">Visit Krishiv Storefront ↗</a>
+                        <a href="${FRONTEND_URL}" target="_blank" class="btn">Visit Krishiv Storefront ↗</a>
                     </div>
                 </div>
                 <div class="footer">
@@ -1782,7 +1783,7 @@ app.get('/api/auth/google/redirect', (req, res) => {
 app.get('/api/auth/google/callback', async (req, res) => {
     const { code } = req.query;
     if (!code) {
-        return res.redirect('http://localhost:5173/?auth_error=Code%20not%20returned%20from%20Google');
+        return res.redirect(`${FRONTEND_URL}/?auth_error=Code%20not%20returned%20from%20Google`);
     }
 
     try {
@@ -1821,10 +1822,10 @@ app.get('/api/auth/google/callback', async (req, res) => {
             provider_id: google_id
         });
 
-        res.redirect(`http://localhost:5173/?auth_success=true&user=${encodeURIComponent(JSON.stringify(user))}`);
+        res.redirect(`${FRONTEND_URL}/?auth_success=true&user=${encodeURIComponent(JSON.stringify(user))}`);
     } catch (err) {
         console.error('Google Callback Error:', err);
-        res.redirect(`http://localhost:5173/?auth_error=${encodeURIComponent(err.message)}`);
+        res.redirect(`${FRONTEND_URL}/?auth_error=${encodeURIComponent(err.message)}`);
     }
 });
 
@@ -1863,10 +1864,10 @@ app.post('/api/auth/apple/callback', async (req, res) => {
             provider_id: code || `apple-id-${Date.now()}`
         });
 
-        res.redirect(`http://localhost:5173/?auth_success=true&user=${encodeURIComponent(JSON.stringify(user))}`);
+        res.redirect(`${FRONTEND_URL}/?auth_success=true&user=${encodeURIComponent(JSON.stringify(user))}`);
     } catch (err) {
         console.error('Apple Callback Error:', err);
-        res.redirect(`http://localhost:5173/?auth_error=${encodeURIComponent(err.message)}`);
+        res.redirect(`${FRONTEND_URL}/?auth_error=${encodeURIComponent(err.message)}`);
     }
 });
 
@@ -1884,7 +1885,7 @@ app.get('/api/auth/facebook/redirect', (req, res) => {
 app.get('/api/auth/facebook/callback', async (req, res) => {
     const { code } = req.query;
     if (!code) {
-        return res.redirect('http://localhost:5173/?auth_error=Code%20not%20returned%20from%20Facebook');
+        return res.redirect(`${FRONTEND_URL}/?auth_error=Code%20not%20returned%20from%20Facebook`);
     }
 
     try {
@@ -1914,10 +1915,10 @@ app.get('/api/auth/facebook/callback', async (req, res) => {
             provider_id: fb_id
         });
 
-        res.redirect(`http://localhost:5173/?auth_success=true&user=${encodeURIComponent(JSON.stringify(user))}`);
+        res.redirect(`${FRONTEND_URL}/?auth_success=true&user=${encodeURIComponent(JSON.stringify(user))}`);
     } catch (err) {
         console.error('Facebook Callback Error:', err);
-        res.redirect(`http://localhost:5173/?auth_error=${encodeURIComponent(err.message)}`);
+        res.redirect(`${FRONTEND_URL}/?auth_error=${encodeURIComponent(err.message)}`);
     }
 });
 

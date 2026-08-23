@@ -92,7 +92,7 @@ export default function AdminDashboard({ onNavigateHome }) {
     message: 'We are thrilled to offer a special 20% discount across our entire organic beauty & ayurvedic collection. Hand-crafted, 100% pure formulations for a glowing complexion!',
     discountCode: 'KRISHIV20',
     ctaText: 'Shop Organic Collection',
-    ctaLink: 'http://localhost:5173'
+    ctaLink: typeof window !== 'undefined' ? window.location.origin : 'https://krishivcorporation.ltd'
   });
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [broadcastStatusMsg, setBroadcastStatusMsg] = useState('');
