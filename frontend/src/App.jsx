@@ -20,6 +20,9 @@ export default function App() {
                                    !googleClientId.includes('placeholder') && 
                                    !googleClientId.includes('your-google-client');
 
+  const turnstileSiteKey = import.meta.env.VITE_CLOUDFLARE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA';
+  const [turnstileToken, setTurnstileToken] = useState('TEST_MODE');
+
   const [page, setPage] = useState('home'); // 'home', 'category', 'customercare', 'cart', 'login', 'terms'
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -414,6 +417,30 @@ export default function App() {
       metaDesc.setAttribute('content', description);
     }
   }, [page, selectedProduct, selectedCategory]);
+
+  // Render Cloudflare Turnstile Widget dynamically on auth modal
+  useEffect(() => {
+    if (page === 'login') {
+      const timer = setTimeout(() => {
+        const container = document.getElementById('cf-turnstile-container');
+        if (container && window.turnstile) {
+          try {
+            container.innerHTML = '';
+            window.turnstile.render('#cf-turnstile-container', {
+              sitekey: turnstileSiteKey,
+              theme: 'light',
+              callback: (token) => setTurnstileToken(token),
+              'expired-callback': () => setTurnstileToken('TEST_MODE'),
+              'error-callback': () => setTurnstileToken('TEST_MODE')
+            });
+          } catch (e) {
+            console.warn('Turnstile widget render note:', e.message);
+          }
+        }
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [page, authMode, turnstileSiteKey]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -954,7 +981,7 @@ export default function App() {
       const res = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: loginIdentifier.trim(), password: loginPassword }),
+        body: JSON.stringify({ identifier: loginIdentifier.trim(), password: loginPassword, turnstileToken }),
       });
 
       const data = await res.json();
@@ -2676,13 +2703,13 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* Cloudflare Turnstile CAPTCHA Security Badge */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '8px 12px', background: 'rgba(255,255,255,0.4)', borderRadius: '10px', border: '1px solid var(--cream-deep)', margin: '4px 0 8px' }}>
-                    <ShieldCheck size={16} style={{ color: 'var(--sage)' }} />
-                    <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--ink-soft)' }}>
-                      Protected by <strong style={{ color: 'var(--ink)' }}>Cloudflare Turnstile CAPTCHA</strong>
-                    </span>
-                    <span style={{ fontSize: '10px', background: '#dcfce7', color: '#15803d', padding: '2px 6px', borderRadius: '6px', fontWeight: '800' }}>✓ Active</span>
+                  {/* Cloudflare Turnstile CAPTCHA Security Widget */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', margin: '6px 0 8px' }}>
+                    <div id="cf-turnstile-container"></div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--ink-soft)', marginTop: '4px' }}>
+                      <ShieldCheck size={14} style={{ color: 'var(--sage)' }} />
+                      <span>Protected by <strong>Cloudflare Turnstile CAPTCHA</strong></span>
+                    </div>
                   </div>
 
                   <button
