@@ -2575,7 +2575,7 @@ app.post('/api/feedback', async (req, res) => {
 // ====================================================
 
 let mockAdminUsers = [
-    { id: 'admin-1', name: 'Krishiv Admin', email: 'krishivcorporation4513@gmail.com', password: process.env.SUPER_ADMIN_PASSWORD || 'admin123', role: 'Super Admin', avatar: '/images/admin_avatar.png' }
+    { id: 'admin-1', name: 'Krishiv Admin', email: 'krishivcorporation4513@gmail.com', password: process.env.SUPER_ADMIN_PASSWORD || 'M98251ilan@', role: 'Super Admin', avatar: '/images/admin_avatar.png' }
 ];
 
 let mockCategories = [

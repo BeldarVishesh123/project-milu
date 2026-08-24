@@ -18,8 +18,8 @@ export default function AdminDashboard({ onNavigateHome }) {
     return saved ? JSON.parse(saved) : null;
   });
   const [adminToken, setAdminToken] = useState(() => localStorage.getItem('krishiv_admin_token') || '');
-  const [loginEmail, setLoginEmail] = useState('krishivcorporation4513@gmail.com');
-  const [loginPassword, setLoginPassword] = useState('admin123');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loginError, setLoginError] = useState('');

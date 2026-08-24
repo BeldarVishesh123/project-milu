@@ -1,6 +1,12 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      // Redirect non-www to www to prevent 308 redirects breaking API POST calls
+      if (window.location.hostname === 'krishivcorporation.ltd') {
+        window.location.replace('https://www.krishivcorporation.ltd' + window.location.pathname + window.location.search + window.location.hash);
+      }
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
