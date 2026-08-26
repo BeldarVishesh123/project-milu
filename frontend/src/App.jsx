@@ -469,16 +469,16 @@ export default function App() {
 
   // Dynamic SEO Page Title & Meta Description Manager
   useEffect(() => {
-    let title = "Krishiv Corporation | 100% Pure Organic Skincare & Herbal Powders";
-    let description = "Shop 100% pure organic cosmetics, ayurvedic skincare, Orange Peel Powder, Neem Leaf, Multani Mitti, Rice Powder, Ubtan & Chocolate Wax Powder.";
+    let title = "Krishiv Corporation | ISO Certified 100% Pure Organic Skincare & Herbal Powders";
+    let description = "Official website of Krishiv Corporation — ISO 9001:2015 Certified Organic Cosmetic Brand. Shop 100% pure organic cosmetics, ayurvedic skincare, Orange Peel Powder, Neem Leaf, Multani Mitti, Rice Powder, Ubtan & Chocolate Wax Powder.";
 
     if (page === 'product-details' && selectedProduct) {
-      title = `${selectedProduct.name} — Organic ${selectedProduct.category || 'Skincare'} | Krishiv Corporation`;
-      description = `${selectedProduct.name}: ${selectedProduct.description?.substring(0, 150) || 'Pure organic formulation for glowing skin.'} Price: ₹${selectedProduct.price}.`;
+      title = `${selectedProduct.name} — ISO Certified Organic ${selectedProduct.category || 'Skincare'} | Krishiv Corporation`;
+      description = `${selectedProduct.name}: ${selectedProduct.description?.substring(0, 150) || 'Pure organic formulation for glowing skin.'} Price: ₹${selectedProduct.price}. ISO 9001 Certified.`;
     } else if (page === 'category' || selectedCategory) {
       const cat = selectedCategory || 'Organic Products';
-      title = `${cat} Collection | Krishiv Corporation`;
-      description = `Explore our pure organic ${cat} range. 100% natural ingredients, no chemicals, fast delivery across India.`;
+      title = `${cat} Collection | ISO Certified Krishiv Corporation`;
+      description = `Explore our ISO Certified pure organic ${cat} range. 100% natural ingredients, no chemicals, fast delivery across India.`;
     } else if (page === 'checkout') {
       title = "Checkout & Place Order | Krishiv Corporation";
     } else if (page === 'terms') {
@@ -2057,7 +2057,7 @@ export default function App() {
             </div>
 
             <div className="eyebrow" id="eyebrow">
-              TRUSTED SINCE GENERATIONS
+              ISO 9001:2015 CERTIFIED BRAND • TRUSTED SINCE GENERATIONS
             </div>
 
             <h1 className="headline">
@@ -2069,7 +2069,7 @@ export default function App() {
             </h1>
 
             <p className="subhead" id="sub">
-              Sourced traditionally, freshly packed, and lab-tested for purity — because your skin deserves nothing less.
+              ISO 9001:2015 Certified Organic Brand. Sourced traditionally, freshly packed, and lab-tested for purity — because your skin deserves nothing less.
             </p>
 
             {/* Product Cards Row */}
