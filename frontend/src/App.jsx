@@ -38,13 +38,6 @@ const getInitialPage = () => {
   if (pathname === '/settings' || pageParam === 'settings') return 'settings';
   if (pathname === '/product-details' || pageParam === 'product-details') return 'product-details';
 
-  if (pathname === '/') {
-    const saved = localStorage.getItem('krishiv_current_page');
-    if (saved && saved !== 'home' && saved !== 'admin') {
-      return saved;
-    }
-  }
-
   return 'home';
 };
 
@@ -558,38 +551,12 @@ export default function App() {
     }
   }, [products, userOrders]);
 
-  // Sync page state with browser URL and localStorage so reload stays on active page
+  // Persist current page to localStorage for single page navigation tracking
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('krishiv_current_page', page);
-      let path = '/';
-      if (page === 'admin') path = '/admin';
-      else if (page === 'category') path = '/category';
-      else if (page === 'customercare') path = '/customercare';
-      else if (page === 'cart') path = '/cart';
-      else if (page === 'login') path = '/login';
-      else if (page === 'terms') path = '/terms';
-      else if (page === 'privacy') path = '/privacy';
-      else if (page === 'refund-policy') path = '/refund-policy';
-      else if (page === 'shipping-policy') path = '/shipping-policy';
-      else if (page === 'checkout') path = '/checkout';
-      else if (page === 'orders') path = '/orders';
-      else if (page === 'order-details') path = activeOrder ? `/order-details?id=${activeOrder.id}` : '/orders';
-      else if (page === 'track-order') path = activeOrder ? `/track-order?id=${activeOrder.id}` : '/orders';
-      else if (page === 'wishlist') path = '/wishlist';
-      else if (page === 'profile') path = '/profile';
-      else if (page === 'addresses') path = '/addresses';
-      else if (page === 'payments') path = '/payments';
-      else if (page === 'settings') path = '/settings';
-      else if (page === 'product-details') path = selectedProduct ? `/product-details?id=${selectedProduct.id}` : '/category';
-      else path = '/';
-
-      const currentUrl = window.location.pathname + window.location.search;
-      if (currentUrl !== path && !window.location.pathname.startsWith('/admin')) {
-        window.history.pushState({ page }, '', path);
-      }
     }
-  }, [page, selectedProduct, activeOrder]);
+  }, [page]);
 
   // Close profile dropdown on click outside or escape key press
   useEffect(() => {
