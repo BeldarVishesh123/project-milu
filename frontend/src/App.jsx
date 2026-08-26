@@ -1759,7 +1759,7 @@ export default function App() {
           >
             {showMobileNav ? <X size={22} /> : <Menu size={22} />}
           </button>
-          <div className="logo-container" onClick={() => setPage('home')}>
+          <div className="logo-container" onClick={() => changePage('home')}>
             <span className="logo-kc">Kc</span>
             <div className="logo-text">
               <span className="logo-main">KRISHIV</span>
@@ -1928,7 +1928,7 @@ export default function App() {
                       onClick={(e) => {
                         e.stopPropagation();
                         setProfileDropdownOpen(false);
-                        setPage('payments');
+                        changePage('payments');
                       }}
                       style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '12px', color: 'var(--ink)', padding: '4px 0', width: '100%', display: 'block', fontWeight: '500' }}
                     >
@@ -1939,7 +1939,7 @@ export default function App() {
                       onClick={(e) => {
                         e.stopPropagation();
                         setProfileDropdownOpen(false);
-                        setPage('settings');
+                        changePage('settings');
                       }}
                       style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '12px', color: 'var(--ink)', padding: '4px 0', width: '100%', display: 'block', fontWeight: '500' }}
                     >
@@ -1963,14 +1963,14 @@ export default function App() {
           ) : (
             <div className="header-auth-buttons" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <button 
-                onClick={() => { setAuthMode('login'); setPage('login'); }} 
+                onClick={() => { setAuthMode('login'); changePage('login'); }} 
                 className="btn-secondary"
                 style={{ padding: '8px 16px', fontSize: '12px' }}
               >
                 Sign In
               </button>
               <button 
-                onClick={() => { setAuthMode('signup'); setPage('login'); }} 
+                onClick={() => { setAuthMode('signup'); changePage('login'); }} 
                 className="btn-primary"
                 style={{ padding: '8px 16px', fontSize: '12px' }}
               >
@@ -2082,7 +2082,7 @@ export default function App() {
                 {products.map((p, i) => (
                   <div 
                     key={p.id}
-                    onClick={() => setSelectedProduct(p)}
+                    onClick={() => changePage('product-details', { product: p })}
                     className="jar-card"
                     data-float
                   >
@@ -3223,22 +3223,22 @@ export default function App() {
             <div className="responsive-account-grid">
               {/* Sidebar Tabs */}
               <div className="account-sidebar" style={{ width: '220px', display: 'flex', flexDirection: 'column', gap: '8px', borderRight: '1.5px solid var(--cream-deep)', paddingRight: '20px' }}>
-                <button onClick={() => setPage('profile')} style={{ background: page === 'profile' ? 'var(--cream-deep)' : 'none', border: 'none', padding: '12px 16px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: 'var(--ink)', transition: 'all 0.2s' }}>
+                <button onClick={() => changePage('profile')} style={{ background: page === 'profile' ? 'var(--cream-deep)' : 'none', border: 'none', padding: '12px 16px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: 'var(--ink)', transition: 'all 0.2s' }}>
                   My Profile
                 </button>
-                <button onClick={() => setPage('orders')} style={{ background: page === 'orders' ? 'var(--cream-deep)' : 'none', border: 'none', padding: '12px 16px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: 'var(--ink)', transition: 'all 0.2s' }}>
+                <button onClick={() => changePage('orders')} style={{ background: page === 'orders' ? 'var(--cream-deep)' : 'none', border: 'none', padding: '12px 16px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: 'var(--ink)', transition: 'all 0.2s' }}>
                   My Orders
                 </button>
-                <button onClick={() => setPage('wishlist')} style={{ background: page === 'wishlist' ? 'var(--cream-deep)' : 'none', border: 'none', padding: '12px 16px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: 'var(--ink)', transition: 'all 0.2s' }}>
+                <button onClick={() => changePage('wishlist')} style={{ background: page === 'wishlist' ? 'var(--cream-deep)' : 'none', border: 'none', padding: '12px 16px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: 'var(--ink)', transition: 'all 0.2s' }}>
                   Wishlist ({wishlist.length})
                 </button>
-                <button onClick={() => setPage('addresses')} style={{ background: page === 'addresses' ? 'var(--cream-deep)' : 'none', border: 'none', padding: '12px 16px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: 'var(--ink)', transition: 'all 0.2s' }}>
+                <button onClick={() => changePage('addresses')} style={{ background: page === 'addresses' ? 'var(--cream-deep)' : 'none', border: 'none', padding: '12px 16px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: 'var(--ink)', transition: 'all 0.2s' }}>
                   Saved Addresses
                 </button>
-                <button onClick={() => setPage('payments')} style={{ background: page === 'payments' ? 'var(--cream-deep)' : 'none', border: 'none', padding: '12px 16px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: 'var(--ink)', transition: 'all 0.2s' }}>
+                <button onClick={() => changePage('payments')} style={{ background: page === 'payments' ? 'var(--cream-deep)' : 'none', border: 'none', padding: '12px 16px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: 'var(--ink)', transition: 'all 0.2s' }}>
                   Payment Methods
                 </button>
-                <button onClick={() => setPage('settings')} style={{ background: page === 'settings' ? 'var(--cream-deep)' : 'none', border: 'none', padding: '12px 16px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: 'var(--ink)', transition: 'all 0.2s' }}>
+                <button onClick={() => changePage('settings')} style={{ background: page === 'settings' ? 'var(--cream-deep)' : 'none', border: 'none', padding: '12px 16px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: 'var(--ink)', transition: 'all 0.2s' }}>
                   Account Settings
                 </button>
                 <button onClick={handleLogout} style={{ background: 'none', border: 'none', padding: '12px 16px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: 'var(--clay)', transition: 'all 0.2s', marginTop: 'auto' }}>
@@ -3331,14 +3331,14 @@ export default function App() {
                               </div>
                               <div style={{ display: 'flex', gap: '8px' }}>
                                 <button 
-                                  onClick={() => { setActiveOrder(order); setPage('order-details'); }}
+                                  onClick={() => changePage('order-details', { order })}
                                   className="btn-secondary" 
                                   style={{ padding: '6px 12px', fontSize: '11px' }}
                                 >
                                   View Details
                                 </button>
                                 <button 
-                                  onClick={() => { setActiveOrder(order); setPage('track-order'); }}
+                                  onClick={() => changePage('track-order', { order })}
                                   className="btn-primary" 
                                   style={{ padding: '6px 12px', fontSize: '11px' }}
                                 >
@@ -3360,7 +3360,7 @@ export default function App() {
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: '12px', background: 'rgba(255,255,255,0.2)', borderRadius: '12px' }}>
                         <Heart size={36} style={{ color: 'var(--ink-soft)' }} />
                         <p style={{ fontSize: '13px', color: 'var(--ink-soft)', fontWeight: '600' }}>Your wishlist is empty.</p>
-                        <button className="btn-primary" onClick={() => setPage('category')} style={{ padding: '8px 16px', fontSize: '11px' }}>
+                        <button className="btn-primary" onClick={() => changePage('category')} style={{ padding: '8px 16px', fontSize: '11px' }}>
                           Add items
                         </button>
                       </div>
@@ -3465,7 +3465,7 @@ export default function App() {
                   Thank you for shopping with Krishiv Cosmetics. Your organic beauty package is being processed and will be delivered shortly.
                 </p>
                 <button 
-                  onClick={() => { setCheckoutSuccess(false); setPage('home'); }} 
+                  onClick={() => { setCheckoutSuccess(false); changePage('home'); }} 
                   className="btn-primary" 
                   style={{ padding: '12px 32px', fontSize: '12px' }}
                 >
@@ -3477,7 +3477,7 @@ export default function App() {
                 <ShoppingBag style={{ width: '64px', height: '64px', color: '#eae0cb', margin: '0 auto 16px' }} />
                 <h3 style={{ fontWeight: '600', fontSize: '18px', color: '#5B5346', marginBottom: '8px' }}>Your cart is empty</h3>
                 <p style={{ fontSize: '12px', color: '#999', marginBottom: '24px' }}>Please add some organic items to your cart before checking out.</p>
-                <button onClick={() => setPage('category')} className="btn-primary" style={{ padding: '12px 32px', fontSize: '12px' }}>Browse Collection</button>
+                <button onClick={() => changePage('category')} className="btn-primary" style={{ padding: '12px 32px', fontSize: '12px' }}>Browse Collection</button>
               </div>
             ) : (
               <div className="responsive-checkout-grid">
@@ -3771,8 +3771,8 @@ export default function App() {
                 <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '24px', color: 'var(--ink)', marginBottom: '8px' }}>Order Not Found</h3>
                 <p style={{ fontSize: '13px', color: 'var(--ink-soft)', marginBottom: '24px' }}>We couldn't retrieve the details for this order. Please try selecting an order from your account dashboard.</p>
                 <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                  <button onClick={() => setPage('orders')} className="btn-primary" style={{ padding: '12px 24px', fontSize: '12px' }}>View My Orders</button>
-                  <button onClick={() => setPage('category')} className="btn-secondary" style={{ padding: '12px 24px', fontSize: '12px' }}>Browse Collection</button>
+                  <button onClick={() => changePage('orders')} className="btn-primary" style={{ padding: '12px 24px', fontSize: '12px' }}>View My Orders</button>
+                  <button onClick={() => changePage('category')} className="btn-secondary" style={{ padding: '12px 24px', fontSize: '12px' }}>Browse Collection</button>
                 </div>
               </div>
             </div>
@@ -3990,13 +3990,13 @@ export default function App() {
                     {/* Action Buttons */}
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '16px', flexWrap: 'wrap' }}>
                       {!isCancelled && (
-                        <button onClick={() => setPage('track-order')} className="btn-primary" style={{ padding: '12px 24px', fontSize: '12px' }}>Track Order</button>
+                        <button onClick={() => changePage('track-order', { order: activeOrder })} className="btn-primary" style={{ padding: '12px 24px', fontSize: '12px' }}>Track Order</button>
                       )}
                       <button onClick={handleDownloadInvoice} className="btn-secondary" style={{ padding: '12px 24px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <CreditCard style={{ width: '14px', height: '14px' }} /> Download Invoice
                       </button>
-                      <button onClick={() => setPage('orders')} className="btn-secondary" style={{ padding: '12px 24px', fontSize: '12px' }}>View My Orders</button>
-                      <button onClick={() => setPage('category')} className="btn-secondary" style={{ padding: '12px 24px', fontSize: '12px' }}>Continue Shopping</button>
+                      <button onClick={() => changePage('orders')} className="btn-secondary" style={{ padding: '12px 24px', fontSize: '12px' }}>View My Orders</button>
+                      <button onClick={() => changePage('category')} className="btn-secondary" style={{ padding: '12px 24px', fontSize: '12px' }}>Continue Shopping</button>
                     </div>
 
                   </div>
@@ -4014,7 +4014,7 @@ export default function App() {
                 <ShieldAlert style={{ width: '64px', height: '64px', color: 'var(--clay)', margin: '0 auto 16px' }} />
                 <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '24px', color: 'var(--ink)', marginBottom: '8px' }}>Order Tracking Unavailable</h3>
                 <p style={{ fontSize: '13px', color: 'var(--ink-soft)', marginBottom: '24px' }}>Please select a valid order from your Account Dashboard to track its status.</p>
-                <button onClick={() => setPage('orders')} className="btn-primary" style={{ padding: '12px 24px', fontSize: '12px' }}>View My Orders</button>
+                <button onClick={() => changePage('orders')} className="btn-primary" style={{ padding: '12px 24px', fontSize: '12px' }}>View My Orders</button>
               </div>
             </div>
           ) : (
@@ -4022,7 +4022,7 @@ export default function App() {
               <div className="glass-panel" style={{ padding: '30px', borderRadius: '18px', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1.5px solid var(--cream-deep)', paddingBottom: '16px' }}>
-                  <button onClick={() => setPage('order-details')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px', color: 'var(--ink)' }}>
+                  <button onClick={() => changePage('order-details', { order: activeOrder })} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px', color: 'var(--ink)' }}>
                     <ArrowLeft style={{ width: '20px', height: '20px' }} />
                   </button>
                   <h2 style={{ fontFamily: 'Playfair Display, serif', fontSize: '24px', color: 'var(--ink)', margin: 0 }}>Track Order</h2>
@@ -4133,7 +4133,7 @@ export default function App() {
                 </div>
 
                 <div style={{ display: 'flex', gap: '12px' }}>
-                  <button onClick={() => setPage('order-details')} className="btn-secondary" style={{ padding: '12px', width: '100%', fontSize: '12px' }}>
+                  <button onClick={() => changePage('order-details', { order: activeOrder })} className="btn-secondary" style={{ padding: '12px', width: '100%', fontSize: '12px' }}>
                     Back to Order Details
                   </button>
                 </div>
@@ -4152,7 +4152,7 @@ export default function App() {
         <div className="modal-overlay">
           <div className="glass-panel modal-content" style={{ background: '#FFFFFF', borderRadius: '24px' }}>
             <button 
-              onClick={() => setSelectedProduct(null)} 
+              onClick={() => { setSelectedProduct(null); if (page === 'product-details') changePage('category'); }} 
               className="modal-close"
               aria-label="Close details"
             >
@@ -4193,7 +4193,7 @@ export default function App() {
               </div>
 
                <button 
-                onClick={() => { addToCart(selectedProduct); setSelectedProduct(null); }}
+                onClick={() => { addToCart(selectedProduct); setSelectedProduct(null); if (page === 'product-details') changePage('cart'); }}
                 disabled={isOutOfStock(selectedProduct)}
                 className="btn-primary"
                 style={{ padding: '12px', fontSize: '12px', width: '100%', marginTop: 'auto', opacity: isOutOfStock(selectedProduct) ? 0.5 : 1, cursor: isOutOfStock(selectedProduct) ? 'not-allowed' : 'pointer' }}
@@ -4209,9 +4209,9 @@ export default function App() {
       <footer className="glass-panel app-footer">
         <p>© 2026 Krishiv Corporation. Purity in Motion. All Rights Reserved.</p>
         <div className="footer-links">
-          <button onClick={() => setPage('terms')}>Terms & Conditions</button>
+          <button onClick={() => changePage('terms')}>Terms & Conditions</button>
           <span>•</span>
-          <button onClick={() => setPage('customercare')}>Customer Support</button>
+          <button onClick={() => changePage('customercare')}>Customer Support</button>
         </div>
       </footer>
 
