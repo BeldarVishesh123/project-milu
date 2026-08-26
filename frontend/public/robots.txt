@@ -6,4 +6,5 @@ Allow: /uploads/
 Disallow: /admin
 Disallow: /api/
 
+Sitemap: https://www.krishivcorporation.ltd/sitemap.xml
 Sitemap: https://krishivcorporation.ltd/sitemap.xml
