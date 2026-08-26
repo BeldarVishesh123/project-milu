@@ -12,6 +12,42 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
     ? 'http://localhost:5000/api'
     : '/api');
 
+const getInitialPage = () => {
+  if (typeof window === 'undefined') return 'home';
+  const pathname = window.location.pathname.replace(/\/$/, '') || '/';
+  const params = new URLSearchParams(window.location.search);
+  const pageParam = params.get('page');
+
+  if (pathname.startsWith('/admin') || pageParam === 'admin') return 'admin';
+  if (pathname === '/category' || pageParam === 'category') return 'category';
+  if (pathname === '/customercare' || pathname === '/customer-care' || pageParam === 'customercare') return 'customercare';
+  if (pathname === '/cart' || pageParam === 'cart') return 'cart';
+  if (pathname === '/login' || pathname === '/signup' || pageParam === 'login') return 'login';
+  if (pathname === '/terms' || pageParam === 'terms') return 'terms';
+  if (pathname === '/privacy' || pageParam === 'privacy') return 'privacy';
+  if (pathname === '/refund-policy' || pageParam === 'refund-policy') return 'refund-policy';
+  if (pathname === '/shipping-policy' || pageParam === 'shipping-policy') return 'shipping-policy';
+  if (pathname === '/checkout' || pageParam === 'checkout') return 'checkout';
+  if (pathname === '/orders' || pageParam === 'orders') return 'orders';
+  if (pathname === '/order-details' || pageParam === 'order-details') return 'order-details';
+  if (pathname === '/track-order' || pageParam === 'track-order') return 'track-order';
+  if (pathname === '/wishlist' || pageParam === 'wishlist') return 'wishlist';
+  if (pathname === '/profile' || pageParam === 'profile') return 'profile';
+  if (pathname === '/addresses' || pageParam === 'addresses') return 'addresses';
+  if (pathname === '/payments' || pageParam === 'payments') return 'payments';
+  if (pathname === '/settings' || pageParam === 'settings') return 'settings';
+  if (pathname === '/product-details' || pageParam === 'product-details') return 'product-details';
+
+  if (pathname === '/') {
+    const saved = localStorage.getItem('krishiv_current_page');
+    if (saved && saved !== 'home' && saved !== 'admin') {
+      return saved;
+    }
+  }
+
+  return 'home';
+};
+
 export default function App() {
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   const isGoogleClientConfigured = googleClientId && 
@@ -34,7 +70,7 @@ export default function App() {
     }
   };
 
-  const [page, setPage] = useState('home'); // 'home', 'category', 'customercare', 'cart', 'login', 'terms'
+  const [page, setPage] = useState(getInitialPage); // 'home', 'category', 'customercare', 'cart', 'login', 'terms'
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState([
@@ -455,14 +491,14 @@ export default function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const initialPage = params.get('page');
+    const initialPage = params.get('page') || window.location.pathname.replace(/^\//, '');
     const initialId = params.get('id');
 
-    if (initialPage && initialId) {
-      if (initialPage === 'product-details' && products.length > 0) {
+    if (initialId) {
+      if ((initialPage === 'product-details' || window.location.pathname === '/product-details') && products.length > 0) {
         const found = products.find(p => String(p.id) === String(initialId));
         if (found) setSelectedProduct(found);
-      } else if (initialPage === 'order-details' || initialPage === 'track-order') {
+      } else if (initialPage === 'order-details' || initialPage === 'track-order' || window.location.pathname === '/order-details' || window.location.pathname === '/track-order') {
         let found = userOrders.find(o => String(o.id) === String(initialId));
         if (!found) {
           const cached = localStorage.getItem('krishiv_last_order');
@@ -479,6 +515,47 @@ export default function App() {
       }
     }
   }, [products, userOrders]);
+
+  // Sync page state with browser URL and localStorage so reload stays on active page
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('krishiv_current_page', page);
+      let path = '/';
+      if (page === 'admin') path = '/admin';
+      else if (page === 'category') path = '/category';
+      else if (page === 'customercare') path = '/customercare';
+      else if (page === 'cart') path = '/cart';
+      else if (page === 'login') path = '/login';
+      else if (page === 'terms') path = '/terms';
+      else if (page === 'privacy') path = '/privacy';
+      else if (page === 'refund-policy') path = '/refund-policy';
+      else if (page === 'shipping-policy') path = '/shipping-policy';
+      else if (page === 'checkout') path = '/checkout';
+      else if (page === 'orders') path = '/orders';
+      else if (page === 'order-details') path = activeOrder ? `/order-details?id=${activeOrder.id}` : '/orders';
+      else if (page === 'track-order') path = activeOrder ? `/track-order?id=${activeOrder.id}` : '/orders';
+      else if (page === 'wishlist') path = '/wishlist';
+      else if (page === 'profile') path = '/profile';
+      else if (page === 'addresses') path = '/addresses';
+      else if (page === 'payments') path = '/payments';
+      else if (page === 'settings') path = '/settings';
+      else if (page === 'product-details') path = selectedProduct ? `/product-details?id=${selectedProduct.id}` : '/category';
+      else path = '/';
+
+      const currentUrl = window.location.pathname + window.location.search;
+      if (currentUrl !== path && !window.location.pathname.startsWith('/admin')) {
+        window.history.pushState({ page }, '', path);
+      }
+    }
+  }, [page, selectedProduct, activeOrder]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setPage(getInitialPage());
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Close profile dropdown on click outside or escape key press
   useEffect(() => {
