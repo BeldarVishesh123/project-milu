@@ -228,15 +228,18 @@ export default function AdminDashboard({ onNavigateHome }) {
         setStats(resStats.stats);
       }
 
-      if (resProds.success && Array.isArray(resProds.products) && resProds.products.length > 0) {
-        setProducts(resProds.products);
+      const rawProds = Array.isArray(resProds) ? resProds : (resProds?.products || resProds?.data || []);
+      if (Array.isArray(rawProds) && rawProds.length > 0) {
+        setProducts(rawProds);
+        setStats(prev => ({ ...prev, totalProducts: rawProds.length }));
       } else {
-        // Fallback to public products endpoint if admin auth token is not yet established
+        // Fallback to public products endpoint
         try {
           const publicRes = await fetch(`${API_BASE_URL}/products`).then(r => r.json());
-          if (publicRes.success && Array.isArray(publicRes.products)) {
-            setProducts(publicRes.products);
-            setStats(prev => ({ ...prev, totalProducts: publicRes.products.length }));
+          const fallbackProds = Array.isArray(publicRes) ? publicRes : (publicRes?.products || publicRes?.data || []);
+          if (Array.isArray(fallbackProds) && fallbackProds.length > 0) {
+            setProducts(fallbackProds);
+            setStats(prev => ({ ...prev, totalProducts: fallbackProds.length }));
           }
         } catch (pErr) {
           console.error('Failed to fetch fallback products', pErr);

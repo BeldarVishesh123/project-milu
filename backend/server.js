@@ -1045,6 +1045,7 @@ let mockFeedback = [];
 
 // 1. Get Products
 app.get('/api/products', async (req, res) => {
+    await ensureDbConnected();
     let productsList = [...mockProducts];
     if (isMongoConnected) {
         try {
@@ -3127,6 +3128,7 @@ app.get('/api/admin/stats', requireAdminAuth, (req, res) => {
 
 // Admin Product CRUD (Protected with requireAdminAuth & MongoDB Sync)
 app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
+    await ensureDbConnected();
     let productsList = [...mockProducts];
     if (isMongoConnected) {
         try {
