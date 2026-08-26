@@ -110,14 +110,30 @@ const OrderModel = mongoose.model('Order', OrderSchema);
 const PendingOtpModel = mongoose.model('PendingOtp', PendingOtpSchema);
 const PendingResetOtpModel = mongoose.model('PendingResetOtp', PendingResetOtpSchema);
 
-mongoose.connect(MONGODB_URI, {
-    serverSelectionTimeoutMS: 5000
-}).then(async () => {
-    isMongoConnected = true;
-    console.log(`[MONGODB SUCCESS] Connected to MongoDB Cloud Database (User: ${MONGODB_USER})`);
-}).catch(err => {
-    console.warn(`[MONGODB NOTICE] MongoDB Cloud connection info (${MONGODB_USER}): ${err.message}. Active runtime server operating.`);
-});
+let mongoPromise = null;
+const ensureDbConnected = async () => {
+    if (mongoose.connection.readyState === 1) {
+        isMongoConnected = true;
+        return true;
+    }
+    if (!mongoPromise) {
+        mongoPromise = mongoose.connect(MONGODB_URI, {
+            serverSelectionTimeoutMS: 5000,
+            connectTimeoutMS: 5000
+        }).then(() => {
+            isMongoConnected = true;
+            console.log(`[MONGODB SUCCESS] Connected to MongoDB Cloud Database (User: ${MONGODB_USER})`);
+            return true;
+        }).catch(err => {
+            console.warn(`[MONGODB NOTICE] MongoDB Cloud connection info (${MONGODB_USER}): ${err.message}. Active runtime server operating.`);
+            mongoPromise = null;
+            return false;
+        });
+    }
+    return mongoPromise;
+};
+
+ensureDbConnected();
 
 // Configure Express to trust reverse proxy headers (Nginx / Cloudflare / AWS ALB / Caddy)
 // Set to 1 hop (or process.env.TRUST_PROXY if specified)
@@ -1048,6 +1064,7 @@ app.get('/api/products', async (req, res) => {
 
 // 2. User Authentication (Signup - Multi-step Init with Real Verification Email OTP)
 app.post('/api/auth/signup/init', async (req, res) => {
+    await ensureDbConnected();
     const { name, phone, email, password } = req.body;
     
     if (!name || !email || !password || !phone) {
@@ -1184,6 +1201,7 @@ app.post('/api/auth/signup', async (req, res) => {
 
 // Verify Signup OTP
 app.post('/api/auth/signup/verify-otp', async (req, res) => {
+    await ensureDbConnected();
     const { email, otp } = req.body;
     if (!email || !otp) {
         return res.status(400).json({ error: 'Email and verification code are required' });
@@ -1193,7 +1211,7 @@ app.post('/api/auth/signup/verify-otp', async (req, res) => {
     let record = pendingSignupOtps[cleanEmail];
 
     // Check MongoDB database if record not in local memory (Serverless instance isolation!)
-    if (!record && isMongoConnected) {
+    if (!record || !record.otpHash) {
         try {
             const dbRecord = await PendingOtpModel.findOne({ email: cleanEmail });
             if (dbRecord) {
@@ -1294,6 +1312,7 @@ app.post('/api/auth/signup/verify-otp', async (req, res) => {
 
 // Resend Signup OTP with Rate Limiting (60s Cooldown)
 app.post('/api/auth/signup/resend-otp', async (req, res) => {
+    await ensureDbConnected();
     const { email } = req.body;
     if (!email) {
         return res.status(400).json({ error: 'Email address is required' });
@@ -1302,7 +1321,7 @@ app.post('/api/auth/signup/resend-otp', async (req, res) => {
     const cleanEmail = email.trim().toLowerCase();
     let record = pendingSignupOtps[cleanEmail];
 
-    if (!record && isMongoConnected) {
+    if (!record || !record.otpHash) {
         try {
             const dbRecord = await PendingOtpModel.findOne({ email: cleanEmail });
             if (dbRecord) {
@@ -1389,6 +1408,7 @@ app.post('/api/auth/test-email', async (req, res) => {
 
 // 3. User Authentication (Login by Email or Phone with Facebook-Level Security & Cloudflare CAPTCHA)
 app.post('/api/auth/login', async (req, res) => {
+    await ensureDbConnected();
     const { email, identifier, password, turnstileToken } = req.body;
 
     // Cloudflare Turnstile CAPTCHA Verification
