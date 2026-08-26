@@ -434,25 +434,27 @@ export default function App() {
 
   // Handle Browser Back and Forward buttons (Popstate Sync)
   useEffect(() => {
-    const handlePopState = () => {
-      const params = new URLSearchParams(window.location.search);
-      const pageFromUrl = params.get('page') || 'home';
-      const idFromUrl = params.get('id');
-      const catFromUrl = params.get('cat');
+    const handlePopState = (event) => {
+      const statePage = event.state?.page;
+      const targetPage = statePage || getInitialPage();
 
-      setPage(pageFromUrl);
+      const params = new URLSearchParams(window.location.search);
+      const idFromUrl = params.get('id') || event.state?.id;
+      const catFromUrl = params.get('cat') || event.state?.category;
+
+      setPage(targetPage);
       if (catFromUrl) setSelectedCategory(catFromUrl);
 
       if (idFromUrl) {
-        if (pageFromUrl === 'product-details' && products.length > 0) {
+        if (targetPage === 'product-details' && products.length > 0) {
           const foundProd = products.find(p => String(p.id) === String(idFromUrl));
           if (foundProd) setSelectedProduct(foundProd);
-        } else if ((pageFromUrl === 'order-details' || pageFromUrl === 'track-order') && userOrders.length > 0) {
+        } else if ((targetPage === 'order-details' || targetPage === 'track-order') && userOrders.length > 0) {
           const foundOrder = userOrders.find(o => String(o.id) === String(idFromUrl));
           if (foundOrder) setActiveOrder(foundOrder);
         }
       } else {
-        if (pageFromUrl !== 'product-details') setSelectedProduct(null);
+        if (targetPage !== 'product-details') setSelectedProduct(null);
       }
       window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -588,14 +590,6 @@ export default function App() {
       }
     }
   }, [page, selectedProduct, activeOrder]);
-
-  useEffect(() => {
-    const handlePopState = () => {
-      setPage(getInitialPage());
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
 
   // Close profile dropdown on click outside or escape key press
   useEffect(() => {
