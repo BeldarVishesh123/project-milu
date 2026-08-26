@@ -35,8 +35,10 @@ const razorpay = new Razorpay({
 
 // MongoDB Atlas Connection & Models Configuration
 const MONGODB_USER = process.env.MONGODB_USER || 'beldarvishesh4552_db_user';
-const MONGODB_PASS = process.env.MONGODB_PASS || 'ZgnRTOFeQahqcvlS';
-const MONGODB_URI = process.env.MONGODB_URI || `mongodb+srv://${MONGODB_USER}:${MONGODB_PASS}@krishivcorp.vdaebdn.mongodb.net/krishiv_co?retryWrites=true&w=majority`;
+let MONGODB_URI = process.env.MONGODB_URI || `mongodb+srv://${MONGODB_USER}:${MONGODB_PASS}@krishivcorp.vdaebdn.mongodb.net/krishiv_co?retryWrites=true&w=majority`;
+if (MONGODB_URI.includes('beldarvishesh4552_db_user:beldarvishesh4552_db_user')) {
+    MONGODB_URI = MONGODB_URI.replace('beldarvishesh4552_db_user:beldarvishesh4552_db_user', 'beldarvishesh4552_db_user:ZgnRTOFeQahqcvlS');
+}
 
 let isMongoConnected = false;
 
