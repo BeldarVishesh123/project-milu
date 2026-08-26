@@ -103,13 +103,32 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false
 }));
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS 
+const defaultOrigins = [
+    'http://localhost:5173',
+    'http://localhost:5000',
+    'http://localhost:3000',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:5000',
+    'https://krishivcorporation.ltd',
+    'https://www.krishivcorporation.ltd',
+    'https://krishiv.co',
+    'https://www.krishiv.co'
+];
+
+const customOrigins = process.env.ALLOWED_ORIGINS 
     ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()) 
-    : ['http://localhost:5173', 'http://localhost:5000', 'https://krishiv.co', 'https://www.krishiv.co'];
+    : [];
+
+const allowedOrigins = [...new Set([...defaultOrigins, ...customOrigins])];
 
 app.use(cors({
     origin: function (origin, callback) {
-        if (!origin || allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+        if (!origin || 
+            allowedOrigins.indexOf(origin) !== -1 || 
+            origin.endsWith('.vercel.app') || 
+            origin.includes('krishivcorporation.ltd') || 
+            origin.includes('krishiv.co') || 
+            process.env.NODE_ENV !== 'production') {
             callback(null, true);
         } else {
             callback(new Error('CORS Policy Exception: Origin not allowed.'));
@@ -893,7 +912,8 @@ if (isSupabaseConfigured) {
     console.log('Supabase credentials not configured. Running in MOCK DATABASE mode.');
 }
 
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || 'dummy-client-id');
+const DEFAULT_GOOGLE_CLIENT_ID = '459084385307-nb55dd142k1c3gfm1lddaqgo8tjugplg.apps.googleusercontent.com';
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID);
 
 // Seed Mock Products Data
 const mockProducts = [
@@ -1621,7 +1641,7 @@ app.post('/api/auth/google', async (req, res) => {
         return res.status(400).json({ error: 'Token is required' });
     }
 
-    const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+    const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID;
     if (!clientId || clientId === 'dummy-client-id' || clientId.includes('your-google-client-id') || clientId.includes('placeholder')) {
         return res.status(400).json({ error: 'Google OAuth configuration is missing on the server. Please set GOOGLE_CLIENT_ID in backend/.env' });
     }
