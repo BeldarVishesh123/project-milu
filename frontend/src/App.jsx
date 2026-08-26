@@ -56,7 +56,7 @@ export default function App() {
                                    !googleClientId.includes('placeholder') && 
                                    !googleClientId.includes('your-google-client');
 
-  const turnstileSiteKey = import.meta.env.VITE_CLOUDFLARE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA';
+  const turnstileSiteKey = import.meta.env.VITE_CLOUDFLARE_TURNSTILE_SITE_KEY || '2x00000000000000000000AB';
   const [turnstileToken, setTurnstileToken] = useState('TEST_MODE');
 
   const resetTurnstile = () => {
@@ -515,6 +515,7 @@ export default function App() {
             window.turnstile.render('#cf-turnstile-container', {
               sitekey: turnstileSiteKey,
               theme: 'light',
+              appearance: 'always',
               callback: (token) => setTurnstileToken(token),
               'expired-callback': () => resetTurnstile(),
               'error-callback': () => resetTurnstile()
