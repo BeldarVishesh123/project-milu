@@ -23,6 +23,17 @@ export default function App() {
   const turnstileSiteKey = import.meta.env.VITE_CLOUDFLARE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA';
   const [turnstileToken, setTurnstileToken] = useState('TEST_MODE');
 
+  const resetTurnstile = () => {
+    setTurnstileToken('TEST_MODE');
+    if (typeof window !== 'undefined' && window.turnstile) {
+      try {
+        window.turnstile.reset('#cf-turnstile-container');
+      } catch (e) {
+        console.warn('Turnstile reset note:', e.message);
+      }
+    }
+  };
+
   const [page, setPage] = useState('home'); // 'home', 'category', 'customercare', 'cart', 'login', 'terms'
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -430,8 +441,8 @@ export default function App() {
               sitekey: turnstileSiteKey,
               theme: 'light',
               callback: (token) => setTurnstileToken(token),
-              'expired-callback': () => setTurnstileToken('TEST_MODE'),
-              'error-callback': () => setTurnstileToken('TEST_MODE')
+              'expired-callback': () => resetTurnstile(),
+              'error-callback': () => resetTurnstile()
             });
           } catch (e) {
             console.warn('Turnstile widget render note:', e.message);
@@ -996,10 +1007,12 @@ export default function App() {
           setPage('home');
         }
       } else {
+        resetTurnstile();
         setAuthError(data.error || 'Invalid email/mobile number or password');
       }
     } catch (err) {
       console.error(err);
+      resetTurnstile();
       setAuthError('Connection error. Running offline mode.');
       const mockUser = { id: 'mock-user-123', email: loginIdentifier, name: 'Guest User' };
       setUser(mockUser);
