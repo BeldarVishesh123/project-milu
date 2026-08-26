@@ -329,19 +329,62 @@ export default function App() {
     return false;
   };
 
+  const getPathForPage = (pageName, params = {}) => {
+    const prod = params.product || selectedProduct;
+    const ord = params.order || activeOrder;
+    const cat = params.category || selectedCategory;
+
+    switch (pageName) {
+      case 'home': return '/';
+      case 'category': return cat && cat !== 'All' ? `/category?cat=${encodeURIComponent(cat)}` : '/category';
+      case 'customercare': return '/customercare';
+      case 'cart': return '/cart';
+      case 'login': return '/login';
+      case 'terms': return '/terms';
+      case 'privacy': return '/privacy';
+      case 'refund-policy': return '/refund-policy';
+      case 'shipping-policy': return '/shipping-policy';
+      case 'checkout': return '/checkout';
+      case 'orders': return '/orders';
+      case 'order-details': return ord ? `/order-details?id=${ord.id}` : '/orders';
+      case 'track-order': return ord ? `/track-order?id=${ord.id}` : '/orders';
+      case 'wishlist': return '/wishlist';
+      case 'profile': return '/profile';
+      case 'addresses': return '/addresses';
+      case 'payments': return '/payments';
+      case 'settings': return '/settings';
+      case 'product-details': return prod ? `/product-details?id=${prod.id}` : '/category';
+      case 'admin': return '/admin';
+      default: return '/';
+    }
+  };
+
   const changePage = useCallback((newPage, extraParams = {}, pushToHistory = true) => {
     setPage(newPage);
     if (extraParams.product) setSelectedProduct(extraParams.product);
     if (extraParams.order) setActiveOrder(extraParams.order);
     if (extraParams.category) setSelectedCategory(extraParams.category);
 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('krishiv_current_page', newPage);
+      if (extraParams.product) {
+        localStorage.setItem('krishiv_last_product', JSON.stringify(extraParams.product));
+      }
+      if (extraParams.order) {
+        localStorage.setItem('krishiv_last_order', JSON.stringify(extraParams.order));
+      }
 
-    if (pushToHistory) {
-      // Keep browser URL clean and parameter-free
-      window.history.pushState({ page: newPage, ...extraParams }, document.title, window.location.pathname);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      if (pushToHistory) {
+        const targetPath = getPathForPage(newPage, extraParams);
+        const currentPath = window.location.pathname + window.location.search;
+        if (currentPath !== targetPath && !window.location.pathname.startsWith('/admin')) {
+          window.history.pushState({ page: newPage, ...extraParams }, document.title, targetPath);
+        }
+      }
     }
-  }, []);
+  }, [selectedProduct, activeOrder, selectedCategory]);
 
   const buyNow = (product) => {
     const prod = products.find(p => p.id === product.id) || product;
@@ -386,10 +429,6 @@ export default function App() {
           localStorage.removeItem('user');
         }
       }
-    }
-    // Clean and hide any query parameters from browser address bar
-    if (window.location.search) {
-      window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
