@@ -80,6 +80,8 @@ const OrderSchema = new mongoose.Schema({
     items: { type: mongoose.Schema.Types.Mixed },
     status: { type: String, default: 'completed' },
     created_at: { type: Date, default: Date.now }
+});
+
 const PendingOtpSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     otpHash: { type: String, required: true },
