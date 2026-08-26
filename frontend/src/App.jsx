@@ -469,8 +469,8 @@ export default function App() {
 
   // Dynamic SEO Page Title & Meta Description Manager
   useEffect(() => {
-    let title = "Krishiv Corporation | ISO Certified 100% Pure Organic Skincare & Herbal Powders";
-    let description = "Official website of Krishiv Corporation — ISO 9001:2015 Certified Organic Cosmetic Brand. Shop 100% pure organic cosmetics, ayurvedic skincare, Orange Peel Powder, Neem Leaf, Multani Mitti, Rice Powder, Ubtan & Chocolate Wax Powder.";
+    let title = "Krishiv Corporation — Official Store | 100% Organic Cosmetics & Skincare";
+    let description = "Welcome to the Official Store of Krishiv Corporation (krishivcorporation.ltd). ISO 9001:2015 Certified manufacturer of 100% pure organic cosmetics, ayurvedic skincare, Orange Peel Powder, Neem Leaf, Multani Mitti, Rice Powder, Ubtan & Chocolate Wax Powder.";
 
     if (page === 'product-details' && selectedProduct) {
       title = `${selectedProduct.name} — ISO Certified Organic ${selectedProduct.category || 'Skincare'} | Krishiv Corporation`;
