@@ -1027,10 +1027,16 @@ export default function App() {
     setAuthError('');
     setAuthLoading(true);
     try {
+      const activeEmail = targetEmail || regEmail.trim().toLowerCase();
+      if (!activeEmail) {
+        setAuthError('Email address is missing. Please sign up again.');
+        return;
+      }
+
       const res = await fetch(`${API_BASE_URL}/auth/signup/resend-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: targetEmail }),
+        body: JSON.stringify({ email: activeEmail }),
       });
 
       const data = await res.json();
@@ -1040,10 +1046,11 @@ export default function App() {
         setOtpDigits(['', '', '', '', '', '']);
         showToast('A new verification code has been sent to your email.');
       } else {
-        setAuthError(data.error || 'Failed to resend code.');
+        setAuthError(data.error || 'Failed to resend verification code. Please try signing up again.');
       }
     } catch (err) {
-      setAuthError('Failed to resend verification code.');
+      console.error(err);
+      setAuthError('Unable to connect to server. Please check your internet connection.');
     } finally {
       setAuthLoading(false);
     }
