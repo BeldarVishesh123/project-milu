@@ -80,11 +80,35 @@ const OrderSchema = new mongoose.Schema({
     items: { type: mongoose.Schema.Types.Mixed },
     status: { type: String, default: 'completed' },
     created_at: { type: Date, default: Date.now }
+const PendingOtpSchema = new mongoose.Schema({
+    email: { type: String, required: true, unique: true },
+    otpHash: { type: String, required: true },
+    expiresAt: { type: Number, required: true },
+    name: { type: String },
+    phone: { type: String },
+    passwordHash: { type: String },
+    salt: { type: String },
+    attempts: { type: Number, default: 0 },
+    lastResendAt: { type: Number },
+    createdAt: { type: Date, default: Date.now, expires: 900 }
+});
+
+const PendingResetOtpSchema = new mongoose.Schema({
+    email: { type: String, required: true, unique: true },
+    otpHash: { type: String, required: true },
+    expiresAt: { type: Number, required: true },
+    userId: { type: String },
+    verified: { type: Boolean, default: false },
+    attempts: { type: Number, default: 0 },
+    lastResendAt: { type: Number },
+    createdAt: { type: Date, default: Date.now, expires: 900 }
 });
 
 const ProductModel = mongoose.model('Product', ProductSchema);
 const UserModel = mongoose.model('User', UserSchema);
 const OrderModel = mongoose.model('Order', OrderSchema);
+const PendingOtpModel = mongoose.model('PendingOtp', PendingOtpSchema);
+const PendingResetOtpModel = mongoose.model('PendingResetOtp', PendingResetOtpSchema);
 
 mongoose.connect(MONGODB_URI, {
     serverSelectionTimeoutMS: 5000
@@ -1032,8 +1056,13 @@ app.post('/api/auth/signup/init', async (req, res) => {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // Check duplicate account
-    const existing = mockUsers.find(u => u.email && u.email.toLowerCase() === cleanEmail && u.isVerified !== false);
+    // Check duplicate account in memory or MongoDB
+    let existing = mockUsers.find(u => u.email && u.email.toLowerCase() === cleanEmail && u.isVerified !== false);
+    if (!existing && isMongoConnected) {
+        try {
+            existing = await UserModel.findOne({ email: cleanEmail });
+        } catch (e) {}
+    }
     if (existing) {
         return res.status(400).json({ 
             error: 'An account with this email already exists. Please log in instead.',
@@ -1060,8 +1089,7 @@ app.post('/api/auth/signup/init', async (req, res) => {
     // Hash Password
     const { salt, hash } = hashPassword(password);
 
-    // Save hashed OTP to pending signup store
-    pendingSignupOtps[cleanEmail] = {
+    const otpRecord = {
         otpHash,
         expiresAt,
         name: name.trim(),
@@ -1073,12 +1101,29 @@ app.post('/api/auth/signup/init', async (req, res) => {
         lastResendAt: Date.now()
     };
 
+    // Save hashed OTP to pending signup store and MongoDB (for Vercel serverless isolation)
+    pendingSignupOtps[cleanEmail] = otpRecord;
+    if (isMongoConnected) {
+        try {
+            await PendingOtpModel.findOneAndUpdate(
+                { email: cleanEmail },
+                otpRecord,
+                { upsert: true, new: true }
+            );
+        } catch (dbErr) {
+            console.error('[DB OTP SAVE ERROR]:', dbErr.message);
+        }
+    }
+
     // Send Real Verification Email
     try {
         await sendVerificationEmail({ toEmail: cleanEmail, name: name.trim(), otpCode: otp, type: 'signup' });
     } catch (mailErr) {
         console.error(`[AUTH API ERROR] Verification email delivery failed for ${cleanEmail}:`, mailErr.message);
         delete pendingSignupOtps[cleanEmail];
+        if (isMongoConnected) {
+            try { await PendingOtpModel.deleteOne({ email: cleanEmail }); } catch (e) {}
+        }
         return res.status(500).json({ 
             error: "We couldn't send the verification email. Please try again.",
             details: mailErr.message
@@ -1100,7 +1145,10 @@ app.post('/api/auth/signup', async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const existing = mockUsers.find(u => u.email === cleanEmail);
+    let existing = mockUsers.find(u => u.email === cleanEmail);
+    if (!existing && isMongoConnected) {
+        try { existing = await UserModel.findOne({ email: cleanEmail }); } catch (e) {}
+    }
     if (existing) {
         return res.status(400).json({ error: 'An account with this email already exists. Please log in instead.', code: 'EMAIL_EXISTS' });
     }
@@ -1117,6 +1165,20 @@ app.post('/api/auth/signup', async (req, res) => {
         created_at: new Date().toISOString() 
     };
     mockUsers.push(newUser);
+    if (isMongoConnected) {
+        try {
+            await UserModel.create({
+                id: newUser.id,
+                name: newUser.name,
+                email: newUser.email,
+                phone: newUser.phone,
+                passwordHash: newUser.passwordHash,
+                salt: newUser.salt,
+                provider: 'local',
+                isVerified: true
+            });
+        } catch (e) {}
+    }
     return res.json({ user: { id: newUser.id, name: newUser.name, email: newUser.email } });
 });
 
@@ -1128,7 +1190,19 @@ app.post('/api/auth/signup/verify-otp', async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const record = pendingSignupOtps[cleanEmail];
+    let record = pendingSignupOtps[cleanEmail];
+
+    // Check MongoDB database if record not in local memory (Serverless instance isolation!)
+    if (!record && isMongoConnected) {
+        try {
+            const dbRecord = await PendingOtpModel.findOne({ email: cleanEmail });
+            if (dbRecord) {
+                record = dbRecord.toObject();
+            }
+        } catch (dbErr) {
+            console.error('[DB OTP FETCH ERROR]:', dbErr.message);
+        }
+    }
 
     if (!record) {
         return res.status(400).json({ error: 'No verification request found for this email. Please sign up again.' });
@@ -1136,11 +1210,17 @@ app.post('/api/auth/signup/verify-otp', async (req, res) => {
 
     if (Date.now() > record.expiresAt) {
         delete pendingSignupOtps[cleanEmail];
+        if (isMongoConnected) {
+            try { await PendingOtpModel.deleteOne({ email: cleanEmail }); } catch (e) {}
+        }
         return res.status(400).json({ error: 'This verification code has expired. Please request a new code.' });
     }
 
     if (record.attempts >= 5) {
         delete pendingSignupOtps[cleanEmail];
+        if (isMongoConnected) {
+            try { await PendingOtpModel.deleteOne({ email: cleanEmail }); } catch (e) {}
+        }
         return res.status(400).json({ error: 'Too many incorrect attempts. Please sign up again.' });
     }
 
@@ -1150,6 +1230,11 @@ app.post('/api/auth/signup/verify-otp', async (req, res) => {
 
     if (inputBuffer.length !== targetBuffer.length || !crypto.timingSafeEqual(inputBuffer, targetBuffer)) {
         record.attempts += 1;
+        if (isMongoConnected) {
+            try {
+                await PendingOtpModel.updateOne({ email: cleanEmail }, { $inc: { attempts: 1 } });
+            } catch (e) {}
+        }
         return res.status(400).json({ error: 'Invalid verification code. Please check and try again.' });
     }
 
@@ -1188,6 +1273,9 @@ app.post('/api/auth/signup/verify-otp', async (req, res) => {
     }
 
     delete pendingSignupOtps[cleanEmail];
+    if (isMongoConnected) {
+        try { await PendingOtpModel.deleteOne({ email: cleanEmail }); } catch (e) {}
+    }
 
     console.log(`[AUTH] Account successfully registered and verified: ${cleanEmail}`);
 
@@ -1212,7 +1300,16 @@ app.post('/api/auth/signup/resend-otp', async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const record = pendingSignupOtps[cleanEmail];
+    let record = pendingSignupOtps[cleanEmail];
+
+    if (!record && isMongoConnected) {
+        try {
+            const dbRecord = await PendingOtpModel.findOne({ email: cleanEmail });
+            if (dbRecord) {
+                record = dbRecord.toObject();
+            }
+        } catch (e) {}
+    }
 
     if (!record) {
         return res.status(400).json({ error: 'No active verification process found for this email.' });
@@ -1229,6 +1326,17 @@ app.post('/api/auth/signup/resend-otp', async (req, res) => {
     record.expiresAt = Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000;
     record.attempts = 0;
     record.lastResendAt = Date.now();
+
+    pendingSignupOtps[cleanEmail] = record;
+    if (isMongoConnected) {
+        try {
+            await PendingOtpModel.findOneAndUpdate(
+                { email: cleanEmail },
+                record,
+                { upsert: true }
+            );
+        } catch (e) {}
+    }
 
     try {
         await sendVerificationEmail({ toEmail: cleanEmail, name: record.name, otpCode: newOtp, type: 'signup' });
@@ -1443,7 +1551,8 @@ app.post('/api/auth/forgot-password/init', async (req, res) => {
     const otpHash = hashOtp(otp);
     const expiresAt = Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000;
 
-    pendingResetOtps[cleanEmail] = {
+    const resetRecord = {
+        email: cleanEmail,
         otpHash,
         expiresAt,
         userId: user.id,
@@ -1452,11 +1561,26 @@ app.post('/api/auth/forgot-password/init', async (req, res) => {
         lastResendAt: Date.now()
     };
 
+    pendingResetOtps[cleanEmail] = resetRecord;
+
+    if (isMongoConnected) {
+        try {
+            await PendingResetOtpModel.findOneAndUpdate(
+                { email: cleanEmail },
+                resetRecord,
+                { upsert: true, new: true }
+            );
+        } catch (e) {}
+    }
+
     try {
         await sendVerificationEmail({ toEmail: cleanEmail, name: user.name, otpCode: otp, type: 'forgot_password' });
     } catch (mailErr) {
         console.error(`[AUTH API ERROR] Forgot password email delivery failed for ${cleanEmail}:`, mailErr.message);
         delete pendingResetOtps[cleanEmail];
+        if (isMongoConnected) {
+            try { await PendingResetOtpModel.deleteOne({ email: cleanEmail }); } catch (e) {}
+        }
         return res.status(500).json({ 
             error: "We couldn't send the verification email. Please try again.",
             details: mailErr.message
@@ -1477,7 +1601,14 @@ app.post('/api/auth/forgot-password/verify-otp', async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const record = pendingResetOtps[cleanEmail];
+    let record = pendingResetOtps[cleanEmail];
+
+    if (!record && isMongoConnected) {
+        try {
+            const dbDoc = await PendingResetOtpModel.findOne({ email: cleanEmail });
+            if (dbDoc) record = dbDoc.toObject();
+        } catch (e) {}
+    }
 
     if (!record) {
         return res.status(400).json({ error: 'No password reset request found for this email.' });
@@ -1485,21 +1616,39 @@ app.post('/api/auth/forgot-password/verify-otp', async (req, res) => {
 
     if (Date.now() > record.expiresAt) {
         delete pendingResetOtps[cleanEmail];
+        if (isMongoConnected) {
+            try { await PendingResetOtpModel.deleteOne({ email: cleanEmail }); } catch (e) {}
+        }
         return res.status(400).json({ error: 'Reset code has expired. Please request a new one.' });
     }
 
     if (record.attempts >= 5) {
         delete pendingResetOtps[cleanEmail];
+        if (isMongoConnected) {
+            try { await PendingResetOtpModel.deleteOne({ email: cleanEmail }); } catch (e) {}
+        }
         return res.status(400).json({ error: 'Too many incorrect attempts. Please try again.' });
     }
 
     const inputHash = hashOtp(otp);
     if (record.otpHash !== inputHash) {
         record.attempts += 1;
+        if (isMongoConnected) {
+            try {
+                await PendingResetOtpModel.updateOne({ email: cleanEmail }, { $inc: { attempts: 1 } });
+            } catch (e) {}
+        }
         return res.status(400).json({ error: 'Invalid verification code. Please check and try again.' });
     }
 
     record.verified = true;
+    pendingResetOtps[cleanEmail] = record;
+    if (isMongoConnected) {
+        try {
+            await PendingResetOtpModel.updateOne({ email: cleanEmail }, { $set: { verified: true } });
+        } catch (e) {}
+    }
+
     return res.json({
         success: true,
         message: 'OTP verified successfully. You can now set your new password.'
@@ -1513,7 +1662,14 @@ app.post('/api/auth/forgot-password/reset', async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const record = pendingResetOtps[cleanEmail];
+    let record = pendingResetOtps[cleanEmail];
+
+    if (!record && isMongoConnected) {
+        try {
+            const dbDoc = await PendingResetOtpModel.findOne({ email: cleanEmail });
+            if (dbDoc) record = dbDoc.toObject();
+        } catch (e) {}
+    }
 
     if (!record || !record.verified) {
         return res.status(400).json({ error: 'Please verify the reset OTP before setting a new password.' });
@@ -1546,6 +1702,9 @@ app.post('/api/auth/forgot-password/reset', async (req, res) => {
     }
 
     delete pendingResetOtps[cleanEmail];
+    if (isMongoConnected) {
+        try { await PendingResetOtpModel.deleteOne({ email: cleanEmail }); } catch (e) {}
+    }
 
     console.log(`[AUTH] Password successfully reset for ${cleanEmail}`);
 
@@ -1562,8 +1721,19 @@ app.post('/api/auth/forgot-password/resend-otp', async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const record = pendingResetOtps[cleanEmail];
-    const user = mockUsers.find(u => u.email && u.email.toLowerCase() === cleanEmail);
+    let record = pendingResetOtps[cleanEmail];
+
+    if (!record && isMongoConnected) {
+        try {
+            const dbDoc = await PendingResetOtpModel.findOne({ email: cleanEmail });
+            if (dbDoc) record = dbDoc.toObject();
+        } catch (e) {}
+    }
+
+    let user = mockUsers.find(u => u.email && u.email.toLowerCase() === cleanEmail);
+    if (!user && isMongoConnected) {
+        try { user = await UserModel.findOne({ email: cleanEmail }); } catch (e) {}
+    }
 
     if (!user || !record) {
         return res.status(400).json({ error: 'Password reset request not found.' });
@@ -1580,6 +1750,17 @@ app.post('/api/auth/forgot-password/resend-otp', async (req, res) => {
     record.verified = false;
     record.attempts = 0;
     record.lastResendAt = Date.now();
+
+    pendingResetOtps[cleanEmail] = record;
+    if (isMongoConnected) {
+        try {
+            await PendingResetOtpModel.findOneAndUpdate(
+                { email: cleanEmail },
+                record,
+                { upsert: true }
+            );
+        } catch (e) {}
+    }
 
     try {
         await sendVerificationEmail({ toEmail: cleanEmail, name: user.name, otpCode: newOtp, type: 'forgot_password' });
