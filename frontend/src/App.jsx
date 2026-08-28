@@ -908,6 +908,19 @@ export default function App() {
     showToast('Cleared all items from your cart.');
   };
 
+  const sanitizeAndNormalizeEmail = (rawEmail) => {
+    if (!rawEmail) return '';
+    let email = rawEmail.trim().toLowerCase();
+    const commonProviders = ['gmail', 'yahoo', 'outlook', 'hotmail', 'icloud', 'rediffmail', 'zoho', 'yandex'];
+    for (const provider of commonProviders) {
+      if (email.endsWith(`@${provider}`)) {
+        email += '.com';
+        break;
+      }
+    }
+    return email;
+  };
+
   // --- AUTH OPERATIONS ---
 
   // 1. Initial Sign Up Submit (Triggers OTP Email Verification)
@@ -916,11 +929,16 @@ export default function App() {
     setAuthError('');
     const errors = {};
 
+    let cleanEmail = sanitizeAndNormalizeEmail(regEmail);
+    if (cleanEmail !== regEmail) {
+      setRegEmail(cleanEmail);
+    }
+
     if (!regName.trim()) {
       errors.name = 'Full Name is required';
     }
-    if (!regEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail.trim())) {
-      errors.email = 'Valid Email Address is required';
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      errors.email = 'Valid Email Address (e.g., name@gmail.com) is required';
     }
     if (!validateIndianPhone(regPhone)) {
       errors.phone = 'Enter a valid 10-digit Indian mobile number (starts with 6-9)';
@@ -2498,6 +2516,10 @@ export default function App() {
                         placeholder="you@example.com"
                         value={regEmail}
                         onChange={(e) => { setRegEmail(e.target.value); setFieldErrors({ ...fieldErrors, email: '' }); }}
+                        onBlur={(e) => {
+                          const normalized = sanitizeAndNormalizeEmail(e.target.value);
+                          if (normalized !== e.target.value) setRegEmail(normalized);
+                        }}
                         className="glass-input glass-input-padded-left"
                       />
                     </div>

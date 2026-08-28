@@ -1158,7 +1158,18 @@ app.post('/api/auth/signup/init', async (req, res) => {
         return res.status(400).json({ error: 'All fields (Full Name, Phone Number, Email, Password) are required' });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
+    let cleanEmail = email.trim().toLowerCase();
+    const commonProviders = ['gmail', 'yahoo', 'outlook', 'hotmail', 'icloud', 'rediffmail', 'zoho', 'yandex'];
+    for (const provider of commonProviders) {
+        if (cleanEmail.endsWith(`@${provider}`)) {
+            cleanEmail += '.com';
+            break;
+        }
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return res.status(400).json({ error: 'Please enter a valid complete email address (e.g., name@gmail.com)' });
+    }
 
     // Check duplicate account in memory or MongoDB
     let existing = mockUsers.find(u => u.email && u.email.toLowerCase() === cleanEmail && u.isVerified !== false);
