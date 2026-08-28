@@ -983,7 +983,11 @@ export default function App() {
         setOtpDigits(['', '', '', '', '', '']);
         setOtpTimer(60);
         setCanResendOtp(false);
-        showToast(data.message || `Verification code sent to ${data.email} and mobile number.`);
+        if (data.demoOtp) {
+          showToast(`Email OTP sent! (SMS Gateway API Key pending on Vercel. Demo OTP: ${data.demoOtp})`);
+        } else {
+          showToast(data.message || `Verification code sent to ${data.email} and mobile number.`);
+        }
       } else {
         if (data.code === 'EMAIL_EXISTS') {
           setFieldErrors({ email: 'An account with this email already exists. Please log in instead.' });

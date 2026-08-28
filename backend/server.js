@@ -1231,9 +1231,10 @@ app.post('/api/auth/signup/init', async (req, res) => {
     }
 
     // Send Real Verification Email & Mobile SMS OTP
+    let smsResult = { provider: 'ConsoleLogger' };
     try {
         await sendVerificationEmail({ toEmail: cleanEmail, name: name.trim(), otpCode: otp, type: 'signup' });
-        await sendMobileSMSOTP({ phone: phone.trim(), name: name.trim(), otpCode: otp, type: 'signup' });
+        smsResult = await sendMobileSMSOTP({ phone: phone.trim(), name: name.trim(), otpCode: otp, type: 'signup' });
     } catch (mailErr) {
         console.error(`[AUTH API ERROR] Verification email delivery failed for ${cleanEmail}:`, mailErr.message);
         delete pendingSignupOtps[cleanEmail];
@@ -1246,11 +1247,17 @@ app.post('/api/auth/signup/init', async (req, res) => {
         });
     }
 
+    const isSmsActive = smsResult && smsResult.provider !== 'ConsoleLogger';
+
     return res.json({
         success: true,
-        message: `We've sent a 6-digit verification code to your email (${cleanEmail}) and mobile number (${phone.trim()}).`,
+        message: isSmsActive
+            ? `We've sent a 6-digit verification code to your email (${cleanEmail}) and mobile number (${phone.trim()}).`
+            : `Verification code sent to email (${cleanEmail}). (SMS Gateway API Key pending for cellular SMS).`,
         email: cleanEmail,
-        phone: phone.trim()
+        phone: phone.trim(),
+        smsDelivered: isSmsActive,
+        demoOtp: !isSmsActive ? otp : undefined
     });
 });
 
