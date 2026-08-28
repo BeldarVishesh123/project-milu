@@ -965,7 +965,7 @@ export default function App() {
         setOtpDigits(['', '', '', '', '', '']);
         setOtpTimer(60);
         setCanResendOtp(false);
-        showToast(`Verification code sent to ${data.email}`);
+        showToast(data.message || `Verification code sent to ${data.email} and mobile number.`);
       } else {
         if (data.code === 'EMAIL_EXISTS') {
           setFieldErrors({ email: 'An account with this email already exists. Please log in instead.' });
@@ -2668,8 +2668,8 @@ export default function App() {
             {/* --- VIEW 2: SIGNUP EMAIL OTP VERIFICATION --- */}
             {authMode === 'verify-otp' && (
               <>
-                <h2 className="auth-title">Verify Your Email</h2>
-                <p className="auth-sub">We've sent a 6-digit verification code to <strong>{targetEmail}</strong></p>
+                <h2 className="auth-title">Verify Email &amp; Mobile</h2>
+                <p className="auth-sub">We've sent a 6-digit verification code to <strong>{targetEmail}</strong> &amp; your registered mobile number</p>
 
                 {authError && (
                   <div className="alert alert-danger" style={{ marginBottom: '12px' }}>
