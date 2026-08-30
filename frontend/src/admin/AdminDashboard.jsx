@@ -12,10 +12,17 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
     : '/api');
 
 export default function AdminDashboard({ onNavigateHome }) {
-  // Auth & Session State
+  // Auth & Session State (Persisted across browser reloads)
   const [adminUser, setAdminUser] = useState(() => {
-    const saved = localStorage.getItem('krishiv_admin_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const savedUser = localStorage.getItem('krishiv_admin_user');
+      if (savedUser) return JSON.parse(savedUser);
+      const savedToken = localStorage.getItem('krishiv_admin_token');
+      if (savedToken) {
+        return { name: 'Krishiv Admin', role: 'Super Admin', email: 'krishivcorporation4513@gmail.com' };
+      }
+    } catch (e) {}
+    return null;
   });
   const [adminToken, setAdminToken] = useState(() => localStorage.getItem('krishiv_admin_token') || '');
   const [loginEmail, setLoginEmail] = useState('');
@@ -348,9 +355,7 @@ export default function AdminDashboard({ onNavigateHome }) {
         setAdminUser(data.admin);
         setAdminToken(data.token);
         localStorage.setItem('krishiv_admin_token', data.token);
-        if (rememberMe) {
-          localStorage.setItem('krishiv_admin_user', JSON.stringify(data.admin));
-        }
+        localStorage.setItem('krishiv_admin_user', JSON.stringify(data.admin));
       } else {
         setLoginError(data.error || 'Invalid credentials');
       }
@@ -361,7 +366,10 @@ export default function AdminDashboard({ onNavigateHome }) {
 
   const handleAdminLogout = () => {
     setAdminUser(null);
+    setAdminToken('');
     localStorage.removeItem('krishiv_admin_user');
+    localStorage.removeItem('krishiv_admin_token');
+    localStorage.removeItem('krishiv_admin_active_tab');
   };
 
   const toggleTheme = () => {
