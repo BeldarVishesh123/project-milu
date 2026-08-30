@@ -247,7 +247,8 @@ export default function AdminDashboard({ onNavigateHome }) {
       }
 
       if (resCats.success && Array.isArray(resCats.categories)) setCategories(resCats.categories);
-      if (resOrds.success && Array.isArray(resOrds.orders)) setOrders(resOrds.orders);
+      const rawOrds = Array.isArray(resOrds) ? resOrds : (resOrds?.orders || resOrds?.data || []);
+      if (Array.isArray(rawOrds)) setOrders(rawOrds);
       if (resCusts.success && Array.isArray(resCusts.customers)) setCustomers(resCusts.customers);
       if (resCoup.success && Array.isArray(resCoup.coupons)) setCoupons(resCoup.coupons);
       if (resRev.success && Array.isArray(resRev.reviews)) setReviews(resRev.reviews);

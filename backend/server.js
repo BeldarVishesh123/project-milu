@@ -2376,13 +2376,7 @@ app.post('/api/orders', async (req, res) => {
     // 3. Persist Order to MongoDB if connected
     if (isMongoConnected) {
         try {
-            await OrderModel.create({
-                id: orderId,
-                user_id: userId || 'guest',
-                total: verifiedGrandTotal,
-                items: newOrder.items,
-                status: 'placed'
-            });
+            await OrderModel.create(newOrder);
         } catch (dbErr) {
             console.error('[MONGODB ORDER SAVE ERROR]', dbErr.message);
         }
@@ -2631,13 +2625,7 @@ app.post('/api/payment/verify-razorpay', async (req, res) => {
 
         if (isMongoConnected) {
             try {
-                await OrderModel.create({
-                    id: orderId,
-                    user_id: userId || 'guest',
-                    total: verifiedGrandTotal || 0,
-                    items: newOrder.items,
-                    status: 'placed'
-                });
+                await OrderModel.create(newOrder);
             } catch (mErr) {
                 console.error('[MONGODB RZP SAVE ERROR]', mErr.message);
             }
@@ -3420,6 +3408,7 @@ app.delete('/api/admin/categories/:id', requireAdminAuth, (req, res) => {
 
 // Admin Orders (Protected with requireAdminAuth)
 app.get('/api/admin/orders', requireAdminAuth, async (req, res) => {
+    await ensureDbConnected();
     let ordersList = [...mockOrders];
     if (isMongoConnected) {
         try {
