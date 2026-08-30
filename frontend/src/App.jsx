@@ -2175,16 +2175,15 @@ export default function App() {
 
             {/* Grid list */}
             <div className="product-grid">
-              {products
-                .filter(p => selectedCategory === 'All' || p.category === selectedCategory)
-                .map((p) => {
-                  const isWishlisted = wishlist.includes(p.id);
-                  // Dynamic badges based on index
-                  const isBestseller = p.id === 1 || p.id === 3;
-                  const isOrganic = p.id === 2 || p.id === 4 || p.id === 5;
+              {(Array.isArray(products) ? products : [])
+                .filter(p => p && typeof p === 'object' && (selectedCategory === 'All' || p.category === selectedCategory))
+                .map((p, idx) => {
+                  const isWishlisted = Array.isArray(wishlist) && wishlist.includes(p.id);
+                  const isBestseller = String(p.id) === '1' || String(p.id) === '3' || p.is_bestseller;
+                  const isOrganic = String(p.id) === '2' || String(p.id) === '4' || String(p.id) === '5' || p.is_organic;
                   
                   return (
-                    <div key={p.id} className="product-card-horizontal">
+                    <div key={p.id || idx} className="product-card-horizontal">
                       {/* Wishlist Button */}
                       <button 
                         onClick={(e) => {
@@ -2212,7 +2211,7 @@ export default function App() {
 
                       {/* Left: Image Wrap with hover Quick View overlay */}
                       <div className="img-wrap">
-                        <img src={p.image_url} alt={p.name} loading="lazy" />
+                        <img src={p.image_url || '/images/orange_peel.png'} alt={p.name || 'Product'} loading="lazy" />
                         <div className="img-overlay" onClick={() => changePage('product-details', { product: p })}>
                           <button className="quickview-trigger">
                             <Eye size={13} />
@@ -2223,8 +2222,8 @@ export default function App() {
 
                       {/* Right: Info Section */}
                       <div className="info-section">
-                        <span className="card-tag">{p.tag}</span>
-                        <h3>{p.name}</h3>
+                        <span className="card-tag">{p.tag || 'Organic'}</span>
+                        <h3>{p.name || 'Product'}</h3>
 
                         {/* Rating & Reviews */}
                         <div className="rating-row">
@@ -2238,7 +2237,7 @@ export default function App() {
                         </div>
 
                         {/* Description */}
-                        <p className="desc">{p.description}</p>
+                        <p className="desc">{p.description || ''}</p>
 
                         {/* Stock and Price Row */}
                         <div className="status-and-price">
@@ -2248,7 +2247,7 @@ export default function App() {
                           </div>
                           
                           <div className="price-box">
-                            <span className="price-curr">₹{p.price}</span>
+                            <span className="price-curr">₹{p.price || 0}</span>
                           </div>
                         </div>
 
