@@ -2156,136 +2156,157 @@ export default function App() {
         )}
 
         {/* PAGE 2: CATEGORY PAGE */}
-        {page === 'category' && (
-          <div className="w-full">
-            <h2 className="cart-title">Our Collection</h2>
-            
-            {/* Filter buttons */}
-            <div className="category-filters">
-              {['All', 'Skin Care', 'Body Care'].map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`filter-btn ${selectedCategory === cat ? 'active' : ''}`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
+        {page === 'category' && (() => {
+          try {
+            return (
+              <div className="w-full">
+                <h2 className="cart-title">Our Collection</h2>
+                
+                {/* Filter buttons */}
+                <div className="category-filters">
+                  {['All', 'Skin Care', 'Body Care'].map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`filter-btn ${selectedCategory === cat ? 'active' : ''}`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
 
-            {/* Grid list */}
-            <div className="product-grid">
-              {(Array.isArray(products) ? products : [])
-                .filter(p => p && typeof p === 'object' && (selectedCategory === 'All' || p.category === selectedCategory))
-                .map((p, idx) => {
-                  const isWishlisted = Array.isArray(wishlist) && wishlist.includes(p.id);
-                  const isBestseller = String(p.id) === '1' || String(p.id) === '3' || p.is_bestseller;
-                  const isOrganic = String(p.id) === '2' || String(p.id) === '4' || String(p.id) === '5' || p.is_organic;
-                  
-                  return (
-                    <div key={p.id || idx} className="product-card-horizontal">
-                      {/* Wishlist Button */}
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleWishlist(p.id);
-                        }}
-                        className={`wishlist-btn ${isWishlisted ? 'active' : ''}`}
-                        title="Add to Wishlist"
-                      >
-                        <Heart size={18} fill={isWishlisted ? "var(--rose)" : "none"} />
-                      </button>
-
-                      {/* Badges */}
-                      <div className="badge-container">
-                        {isOutOfStock(p) ? (
-                          <span className="badge-pill out-of-stock" style={{ background: '#fee2e2', color: '#dc2626', fontWeight: '700' }}>OUT OF STOCK</span>
-                        ) : (
-                          <>
-                            {p.is_new && <span className="badge-pill new">New</span>}
-                            {isBestseller && <span className="badge-pill bestseller">Bestseller</span>}
-                            {isOrganic && <span className="badge-pill organic">Organic</span>}
-                          </>
-                        )}
-                      </div>
-
-                      {/* Left: Image Wrap with hover Quick View overlay */}
-                      <div className="img-wrap">
-                        <img src={p.image_url || '/images/orange_peel.png'} alt={p.name || 'Product'} loading="lazy" />
-                        <div className="img-overlay" onClick={() => changePage('product-details', { product: p })}>
-                          <button className="quickview-trigger">
-                            <Eye size={13} />
-                            Quick View
+                {/* Grid list */}
+                <div className="product-grid">
+                  {(Array.isArray(products) ? products : [])
+                    .filter(p => p && typeof p === 'object' && (selectedCategory === 'All' || p.category === selectedCategory))
+                    .map((p, idx) => {
+                      const isWishlisted = Array.isArray(wishlist) && wishlist.includes(p.id);
+                      const isBestseller = String(p.id) === '1' || String(p.id) === '3' || p.is_bestseller;
+                      const isOrganic = String(p.id) === '2' || String(p.id) === '4' || String(p.id) === '5' || p.is_organic;
+                      
+                      return (
+                        <div key={p.id || idx} className="product-card-horizontal">
+                          {/* Wishlist Button */}
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleWishlist(p.id);
+                            }}
+                            className={`wishlist-btn ${isWishlisted ? 'active' : ''}`}
+                            title="Add to Wishlist"
+                          >
+                            <Heart size={18} fill={isWishlisted ? "var(--rose)" : "none"} />
                           </button>
-                        </div>
-                      </div>
 
-                      {/* Right: Info Section */}
-                      <div className="info-section">
-                        <span className="card-tag">{p.tag || 'Organic'}</span>
-                        <h3>{p.name || 'Product'}</h3>
-
-                        {/* Rating & Reviews */}
-                        <div className="rating-row">
-                          <span className="stars">
-                            {(() => {
-                              const starCount = Math.max(0, Math.min(5, Math.floor(Number(p.rating) || 5)));
-                              return '★'.repeat(starCount) + '☆'.repeat(5 - starCount);
-                            })()}
-                          </span>
-                          <span className="reviews">({p.review_count || 0} reviews)</span>
-                        </div>
-
-                        {/* Description */}
-                        <p className="desc">{p.description || ''}</p>
-
-                        {/* Stock and Price Row */}
-                        <div className="status-and-price">
-                          <div className={`stock-status ${isOutOfStock(p) ? 'out-of-stock' : 'in-stock'}`} style={isOutOfStock(p) ? { color: '#dc2626' } : {}}>
-                            <span className="stock-dot" style={isOutOfStock(p) ? { background: '#dc2626' } : {}}></span>
-                            {isOutOfStock(p) ? 'OUT OF STOCK' : (p.stock_status || 'In Stock')}
+                          {/* Badges */}
+                          <div className="badge-container">
+                            {isOutOfStock(p) ? (
+                              <span className="badge-pill out-of-stock" style={{ background: '#fee2e2', color: '#dc2626', fontWeight: '700' }}>OUT OF STOCK</span>
+                            ) : (
+                              <>
+                                {p.is_new && <span className="badge-pill new">New</span>}
+                                {isBestseller && <span className="badge-pill bestseller">Bestseller</span>}
+                                {isOrganic && <span className="badge-pill organic">Organic</span>}
+                              </>
+                            )}
                           </div>
-                          
-                          <div className="price-box">
-                            <span className="price-curr">₹{p.price || 0}</span>
+
+                          {/* Left: Image Wrap with hover Quick View overlay */}
+                          <div className="img-wrap">
+                            <img src={p.image_url || '/images/orange_peel.png'} alt={p.name || 'Product'} loading="lazy" />
+                            <div className="img-overlay" onClick={() => changePage('product-details', { product: p })}>
+                              <button className="quickview-trigger">
+                                <Eye size={13} />
+                                Quick View
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Right: Info Section */}
+                          <div className="info-section">
+                            <span className="card-tag">{p.tag || 'Organic'}</span>
+                            <h3>{p.name || 'Product'}</h3>
+
+                            {/* Rating & Reviews */}
+                            <div className="rating-row">
+                              <span className="stars">
+                                {(() => {
+                                  const starCount = Math.max(0, Math.min(5, Math.floor(Number(p.rating) || 5)));
+                                  return '★'.repeat(starCount) + '☆'.repeat(5 - starCount);
+                                })()}
+                              </span>
+                              <span className="reviews">({p.review_count || 0} reviews)</span>
+                            </div>
+
+                            {/* Description */}
+                            <p className="desc">{p.description || ''}</p>
+
+                            {/* Stock and Price Row */}
+                            <div className="status-and-price">
+                              <div className={`stock-status ${isOutOfStock(p) ? 'out-of-stock' : 'in-stock'}`} style={isOutOfStock(p) ? { color: '#dc2626' } : {}}>
+                                <span className="stock-dot" style={isOutOfStock(p) ? { background: '#dc2626' } : {}}></span>
+                                {isOutOfStock(p) ? 'OUT OF STOCK' : (p.stock_status || 'In Stock')}
+                              </div>
+                              
+                              <div className="price-box">
+                                <span className="price-curr">₹{p.price || 0}</span>
+                              </div>
+                            </div>
+
+                            {/* Action Buttons Row */}
+                            <div className="actions-row">
+                              <button 
+                                onClick={() => addToCart(p)}
+                                disabled={isOutOfStock(p)}
+                                className="btn-action btn-primary-action"
+                                style={isOutOfStock(p) ? { opacity: 0.5, cursor: 'not-allowed', background: 'var(--cream-deep)', border: '1px solid var(--cream-deep)', color: 'var(--ink-soft)' } : {}}
+                              >
+                                <ShoppingCart size={15} />
+                                {isOutOfStock(p) ? 'OUT OF STOCK' : 'Add to Cart'}
+                              </button>
+                              <button 
+                                onClick={() => buyNow(p)}
+                                disabled={isOutOfStock(p)}
+                                className="btn-action btn-accent-action"
+                                style={isOutOfStock(p) ? { opacity: 0.5, cursor: 'not-allowed', background: 'var(--cream-deep)', border: '1px solid var(--cream-deep)', color: 'var(--ink-soft)' } : {}}
+                              >
+                                <CreditCard size={15} />
+                                {isOutOfStock(p) ? 'OUT OF STOCK' : 'Buy Now'}
+                              </button>
+                              <button 
+                                onClick={() => changePage('product-details', { product: p })}
+                                className="btn-action btn-outline-action"
+                              >
+                                <Eye size={14} />
+                                Details
+                              </button>
+                            </div>
                           </div>
                         </div>
-
-                        {/* Action Buttons Row */}
-                        <div className="actions-row">
-                          <button 
-                            onClick={() => addToCart(p)}
-                            disabled={isOutOfStock(p)}
-                            className="btn-action btn-primary-action"
-                            style={isOutOfStock(p) ? { opacity: 0.5, cursor: 'not-allowed', background: 'var(--cream-deep)', border: '1px solid var(--cream-deep)', color: 'var(--ink-soft)' } : {}}
-                          >
-                            <ShoppingCart size={15} />
-                            {isOutOfStock(p) ? 'OUT OF STOCK' : 'Add to Cart'}
-                          </button>
-                          <button 
-                            onClick={() => buyNow(p)}
-                            disabled={isOutOfStock(p)}
-                            className="btn-action btn-accent-action"
-                            style={isOutOfStock(p) ? { opacity: 0.5, cursor: 'not-allowed', background: 'var(--cream-deep)', border: '1px solid var(--cream-deep)', color: 'var(--ink-soft)' } : {}}
-                          >
-                            <CreditCard size={15} />
-                            {isOutOfStock(p) ? 'OUT OF STOCK' : 'Buy Now'}
-                          </button>
-                          <button 
-                            onClick={() => changePage('product-details', { product: p })}
-                            className="btn-action btn-outline-action"
-                          >
-                            <Eye size={14} />
-                            Details
-                          </button>
-                        </div>
-                      </div>
+                      );
+                    })}
+                </div>
+              </div>
+            );
+          } catch (err) {
+            console.error('Safe category render catch:', err);
+            return (
+              <div className="w-full" style={{ padding: '40px 20px', textAlign: 'center' }}>
+                <h2 className="cart-title">Our Collection</h2>
+                <div className="product-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px', marginTop: '20px' }}>
+                  {(products || []).map((p, idx) => (
+                    <div key={p.id || idx} style={{ padding: '20px', borderRadius: '16px', background: 'rgba(255,255,255,0.4)', border: '1px solid var(--glass-border)' }}>
+                      <img src={p.image_url || '/images/orange_peel.png'} alt={p.name} style={{ width: '120px', height: '120px', objectFit: 'contain', margin: '0 auto 12px' }} />
+                      <h3 style={{ fontSize: '16px', fontWeight: '700' }}>{p.name}</h3>
+                      <p style={{ fontSize: '14px', color: 'var(--gold)', fontWeight: '700', margin: '8px 0' }}>₹{p.price}</p>
+                      <button onClick={() => addToCart(p)} className="btn-primary" style={{ width: '100%', padding: '10px', fontSize: '12px' }}>Add to Cart</button>
                     </div>
-                  );
-                })}
-            </div>
-          </div>
-        )}
+                  ))}
+                </div>
+              </div>
+            );
+          }
+        })()}
 
         {/* PAGE 3: CUSTOMER CARE PAGE */}
         {page === 'customercare' && (
