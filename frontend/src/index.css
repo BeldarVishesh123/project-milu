@@ -2081,6 +2081,14 @@ button, input, select, textarea, .btn-primary, .btn-secondary, .btn-action, .nav
     scrollbar-width: none;
   }
 
+/* Base Desktop Account Dashboard Grid Layout */
+.responsive-account-grid {
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
+  width: 100%;
+}
+
   /* Mobile Account Dashboard Tabs (Horizontal Scrollable Tab Bar) */
   .account-dashboard-panel {
     padding: 20px 14px !important;

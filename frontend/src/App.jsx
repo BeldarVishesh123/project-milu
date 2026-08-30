@@ -3403,6 +3403,43 @@ export default function App() {
                               </div>
                             </div>
 
+                            {/* Ordered Items Preview Section */}
+                            {(() => {
+                              const itemsList = Array.isArray(order.items) 
+                                ? order.items 
+                                : (order.items?.cartItems || order.cartItems || []);
+                              
+                              if (itemsList.length === 0) return null;
+
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'rgba(255,255,255,0.4)', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)' }}>
+                                  <span style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Ordered Items ({itemsList.length}):</span>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {itemsList.map((item, iIdx) => {
+                                      const pId = Number(item.productId || item.id);
+                                      const p = products.find(prod => prod.id === pId) || item;
+                                      return (
+                                        <div key={iIdx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <img 
+                                              src={p.image_url || '/images/orange_peel.png'} 
+                                              alt={p.name || 'Product'} 
+                                              style={{ width: '36px', height: '36px', objectFit: 'contain', background: 'var(--cream)', borderRadius: '6px', border: '1px solid var(--cream-deep)', padding: '2px' }} 
+                                            />
+                                            <div>
+                                              <div style={{ fontWeight: '700', color: 'var(--ink)' }}>{p.name || `Product #${pId}`}</div>
+                                              <div style={{ fontSize: '10.5px', color: 'var(--ink-soft)' }}>Qty: {item.quantity || 1} × ₹{p.price || 0}</div>
+                                            </div>
+                                          </div>
+                                          <div style={{ fontWeight: '700', color: 'var(--ink)' }}>₹{(p.price || 0) * (item.quantity || 1)}</div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <div>
                                 <span style={{ fontSize: '12px', color: 'var(--ink-soft)' }}>Total Amount:</span>
