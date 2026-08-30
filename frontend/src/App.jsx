@@ -203,6 +203,8 @@ export default function App() {
     }
   });
   const [userOrders, setUserOrders] = useState([]);
+  const [isOrdersLoading, setIsOrdersLoading] = useState(false);
+  const [ordersFetchError, setOrdersFetchError] = useState(null);
   const [tosAccepted, setTosAccepted] = useState(false);
   // Store settings & Shipping calculation state
   const [storeSettings, setStoreSettings] = useState({
@@ -633,6 +635,8 @@ export default function App() {
 
   const fetchUserOrders = useCallback(async () => {
     if (!user) return;
+    setIsOrdersLoading(true);
+    setOrdersFetchError(null);
     try {
       const uId = user.id || 'guest';
       const qEmail = encodeURIComponent(user.email || '');
@@ -641,12 +645,32 @@ export default function App() {
       const res = await fetch(`${API_BASE_URL}/orders/${uId}?email=${qEmail}&phone=${qPhone}&name=${qName}`);
       if (res.ok) {
         const data = await res.json();
-        if (data.success) {
-          setUserOrders(data.orders || []);
+        if (data.success && Array.isArray(data.orders)) {
+          let fetchedOrders = data.orders;
+          try {
+            const savedLastOrder = localStorage.getItem('krishiv_last_order');
+            if (savedLastOrder) {
+              const parsed = JSON.parse(savedLastOrder);
+              if (parsed && (parsed.id || parsed._id)) {
+                const matchId = String(parsed.id || parsed._id);
+                if (!fetchedOrders.some(o => String(o.id || o._id) === matchId)) {
+                  fetchedOrders = [parsed, ...fetchedOrders];
+                }
+              }
+            }
+          } catch (e) {}
+          setUserOrders(fetchedOrders);
+        } else {
+          setOrdersFetchError(data.error || 'Unable to retrieve order history.');
         }
+      } else {
+        setOrdersFetchError(`Server error (${res.status}). Could not fetch orders.`);
       }
     } catch (e) {
       console.error('Error fetching orders:', e);
+      setOrdersFetchError('Network error connecting to order service.');
+    } finally {
+      setIsOrdersLoading(false);
     }
   }, [user]);
 
@@ -3341,9 +3365,9 @@ export default function App() {
         {['profile', 'orders', 'wishlist', 'addresses', 'payments', 'settings'].includes(page) && user && (
           <div className="glass-panel account-dashboard-panel" style={{ padding: '40px', maxWidth: '1000px', margin: '40px auto', borderRadius: '24px', minHeight: '500px', background: 'var(--glass-bg)', backdropFilter: 'blur(20px)', border: '1px solid var(--glass-border)', boxShadow: '0 8px 32px rgba(90, 62, 26, 0.05)' }}>
             <h2 style={{ fontFamily: 'Playfair Display, serif', fontSize: '28px', color: 'var(--ink)', marginBottom: '24px' }}>My Account Dashboard</h2>
-            <div className="responsive-account-grid">
+            <div className="responsive-account-grid" style={{ display: 'flex', gap: '24px', width: '100%', alignItems: 'flex-start' }}>
               {/* Sidebar Tabs */}
-              <div className="account-sidebar" style={{ width: '220px', display: 'flex', flexDirection: 'column', gap: '8px', borderRight: '1.5px solid var(--cream-deep)', paddingRight: '20px' }}>
+              <div className="account-sidebar" style={{ width: '220px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '8px', borderRight: '1.5px solid var(--cream-deep)', paddingRight: '20px' }}>
                 <button onClick={() => changePage('profile')} style={{ background: page === 'profile' ? 'var(--cream-deep)' : 'none', border: 'none', padding: '12px 16px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: 'var(--ink)', transition: 'all 0.2s' }}>
                   My Profile
                 </button>
@@ -3351,7 +3375,7 @@ export default function App() {
                   My Orders
                 </button>
                 <button onClick={() => changePage('wishlist')} style={{ background: page === 'wishlist' ? 'var(--cream-deep)' : 'none', border: 'none', padding: '12px 16px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: 'var(--ink)', transition: 'all 0.2s' }}>
-                  Wishlist ({wishlist.length})
+                  Wishlist ({(Array.isArray(wishlist) ? wishlist : []).length})
                 </button>
                 <button onClick={() => changePage('addresses')} style={{ background: page === 'addresses' ? 'var(--cream-deep)' : 'none', border: 'none', padding: '12px 16px', borderRadius: '10px', textAlign: 'left', cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: 'var(--ink)', transition: 'all 0.2s' }}>
                   Saved Addresses
@@ -3368,7 +3392,7 @@ export default function App() {
               </div>
 
               {/* Tab Contents */}
-              <div className="account-tab-content" style={{ flex: 1, paddingLeft: '10px' }}>
+              <div className="account-tab-content" style={{ flex: 1, minWidth: 0, paddingLeft: '10px' }}>
                 {page === 'profile' && (
                   <div>
                     <h3 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--ink)', marginBottom: '16px' }}>Profile Information</h3>
@@ -3377,7 +3401,7 @@ export default function App() {
                         <img src={user.avatar_url} alt={user.name} style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--gold)' }} />
                       ) : (
                         <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'var(--cream-deep)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: '700', border: '2px solid var(--gold)', color: 'var(--ink)' }}>
-                          {(user.name || user.email).substring(0,2).toUpperCase()}
+                          {(user.name || user.email || 'US').substring(0,2).toUpperCase()}
                         </div>
                       )}
                       <div>
@@ -3405,7 +3429,19 @@ export default function App() {
                 {page === 'orders' && (
                   <div>
                     <h3 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--ink)', marginBottom: '16px' }}>Order History</h3>
-                    {userOrders.length === 0 ? (
+                    {isOrdersLoading ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: '12px' }}>
+                        <Loader2 className="animate-spin" size={28} style={{ color: 'var(--gold)' }} />
+                        <p style={{ fontSize: '13px', color: 'var(--ink-soft)', fontWeight: '600' }}>Loading your orders...</p>
+                      </div>
+                    ) : ordersFetchError ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '36px 16px', gap: '12px', background: 'rgba(255,255,255,0.4)', borderRadius: '14px', border: '1px solid #fecaca' }}>
+                        <p style={{ fontSize: '13px', color: '#dc2626', fontWeight: '600' }}>{ordersFetchError}</p>
+                        <button className="btn-secondary" onClick={() => fetchUserOrders()} style={{ padding: '8px 16px', fontSize: '12px' }}>
+                          Try Reloading Orders
+                        </button>
+                      </div>
+                    ) : userOrders.length === 0 ? (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: '12px', background: 'rgba(255,255,255,0.2)', borderRadius: '12px' }}>
                         <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--ink-soft)' }}>
                           <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
@@ -3413,7 +3449,7 @@ export default function App() {
                           <line x1="12" y1="17" x2="12" y2="21"></line>
                         </svg>
                         <p style={{ fontSize: '13px', color: 'var(--ink-soft)', fontWeight: '600' }}>You have not placed any orders yet.</p>
-                        <button className="btn-primary" onClick={() => setPage('category')} style={{ padding: '8px 16px', fontSize: '11px' }}>
+                        <button className="btn-primary" onClick={() => changePage('category')} style={{ padding: '8px 16px', fontSize: '11px' }}>
                           Browse Products
                         </button>
                       </div>

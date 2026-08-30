@@ -2784,42 +2784,57 @@ app.get('/api/orders/:userId', async (req, res) => {
         try {
             const queryConditions = [];
             if (userId && userId !== 'guest' && userId !== 'undefined') {
-                queryConditions.push({ user_id: userId });
+                queryConditions.push({ user_id: String(userId) });
+                queryConditions.push({ userId: String(userId) });
+                queryConditions.push({ customer_id: String(userId) });
             }
             if (email && email !== 'undefined' && email.trim() !== '') {
-                queryConditions.push({ 'items.shipping.email': { $regex: new RegExp(email.trim(), 'i') } });
+                const cleanEmail = email.trim();
+                const emailRegex = new RegExp(`^${cleanEmail.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
+                queryConditions.push({ customer_email: emailRegex });
+                queryConditions.push({ email: emailRegex });
+                queryConditions.push({ user_email: emailRegex });
+                queryConditions.push({ 'items.shipping.email': emailRegex });
+                queryConditions.push({ 'shipping.email': emailRegex });
             }
             if (phone && phone !== 'undefined' && phone.trim() !== '') {
                 queryConditions.push({ 'items.shipping.phone': phone.trim() });
-            }
-            if (name && name !== 'undefined' && name.trim() !== '') {
-                queryConditions.push({ 'items.shipping.name': { $regex: new RegExp(name.trim(), 'i') } });
-                queryConditions.push({ 'items.shipping.fullName': { $regex: new RegExp(name.trim(), 'i') } });
+                queryConditions.push({ 'shipping.phone': phone.trim() });
             }
 
-            if (queryConditions.length === 0) {
-                queryConditions.push({ user_id: userId });
+            if (queryConditions.length > 0) {
+                dbOrders = await OrderModel.find({
+                    $or: queryConditions
+                }).sort({ created_at: -1 }).lean();
             }
-
-            dbOrders = await OrderModel.find({
-                $or: queryConditions
-            }).sort({ created_at: -1 }).lean();
         } catch (mErr) {
             console.error('[MONGODB GET USER ORDERS ERROR]', mErr.message);
         }
     }
 
-    const mockUserOrders = mockOrders.filter(order => 
-        (userId && order.user_id === userId) ||
-        (email && order.items?.shipping?.email?.toLowerCase() === email.toLowerCase()) ||
-        (phone && order.items?.shipping?.phone === phone) ||
-        (name && (order.items?.shipping?.name || order.items?.shipping?.fullName)?.toLowerCase().includes(name.toLowerCase()))
-    );
+    const cleanReqEmail = (email && email !== 'undefined') ? email.trim().toLowerCase() : '';
+    const mockUserOrders = mockOrders.filter(order => {
+        if (!order) return false;
+        const matchUserId = userId && userId !== 'guest' && (
+            String(order.user_id) === String(userId) || 
+            String(order.userId) === String(userId)
+        );
+        const matchEmail = cleanReqEmail && (
+            (order.customer_email && order.customer_email.toLowerCase() === cleanReqEmail) ||
+            (order.email && order.email.toLowerCase() === cleanReqEmail) ||
+            (order.items?.shipping?.email && order.items?.shipping?.email.toLowerCase() === cleanReqEmail) ||
+            (order.shipping?.email && order.shipping?.email.toLowerCase() === cleanReqEmail)
+        );
+        return matchUserId || matchEmail;
+    });
 
     const combinedMap = new Map();
     for (const o of [...(dbOrders || []), ...mockUserOrders]) {
-        if (!combinedMap.has(o.id)) {
-            combinedMap.set(o.id, o);
+        if (o && (o.id || o._id)) {
+            const key = String(o.id || o._id);
+            if (!combinedMap.has(key)) {
+                combinedMap.set(key, o);
+            }
         }
     }
 
