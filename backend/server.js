@@ -131,9 +131,16 @@ const ensureDbConnected = async () => {
         mongoPromise = mongoose.connect(MONGODB_URI, {
             serverSelectionTimeoutMS: 5000,
             connectTimeoutMS: 5000
-        }).then(() => {
+        }).then(async () => {
             isMongoConnected = true;
             console.log(`[MONGODB SUCCESS] Connected to MongoDB Cloud Database (User: ${MONGODB_USER})`);
+            try {
+                const count = await OrderModel.countDocuments();
+                if (count === 0 && initialSeedOrders.length > 0) {
+                    await OrderModel.insertMany(initialSeedOrders);
+                    console.log('[MONGODB SEED] Initial seed orders created in database.');
+                }
+            } catch (sErr) {}
             return true;
         }).catch(err => {
             console.warn(`[MONGODB NOTICE] MongoDB Cloud connection info (${MONGODB_USER}): ${err.message}. Active runtime server operating.`);
@@ -1138,10 +1145,87 @@ const mockProducts = [
     }
 ];
 
+const initialSeedOrders = [
+  {
+    id: "order-1785815951444",
+    user_id: "usr-admin-01",
+    userId: "usr-admin-01",
+    customer_email: "krishivcorporation4513@gmail.com",
+    email: "krishivcorporation4513@gmail.com",
+    total: 334,
+    subtotal: 299,
+    shipping_fee: 35,
+    paymentMethod: "COD",
+    payment_method: "COD",
+    status: "placed",
+    created_at: new Date(Date.now() - 86400000).toISOString(),
+    items: {
+      cartItems: [
+        {
+          productId: 1,
+          id: 1,
+          name: "Orange Peel Powder",
+          price: 299,
+          quantity: 1,
+          image_url: "/images/orange_peel.png"
+        }
+      ],
+      shipping: {
+        name: "Krishiv Customer",
+        fullName: "Krishiv Customer",
+        email: "krishivcorporation4513@gmail.com",
+        phone: "+919876543210",
+        address: "102 Luxury Heritage Enclave",
+        city: "Surat",
+        state: "Gujarat",
+        zip: "395007"
+      },
+      payment: { method: "COD" }
+    }
+  },
+  {
+    id: "order-1785822848687",
+    user_id: "usr-admin-01",
+    userId: "usr-admin-01",
+    customer_email: "krishivcorporation4513@gmail.com",
+    email: "krishivcorporation4513@gmail.com",
+    total: 448,
+    subtotal: 399,
+    shipping_fee: 49,
+    paymentMethod: "Razorpay",
+    payment_method: "Razorpay",
+    status: "confirmed",
+    created_at: new Date(Date.now() - 43200000).toISOString(),
+    items: {
+      cartItems: [
+        {
+          productId: 6,
+          id: 6,
+          name: "Chocolate Wax Powder",
+          price: 399,
+          quantity: 1,
+          image_url: "/images/chocolate_wax_powder.png"
+        }
+      ],
+      shipping: {
+        name: "Krishiv Customer",
+        fullName: "Krishiv Customer",
+        email: "krishivcorporation4513@gmail.com",
+        phone: "+919876543210",
+        address: "102 Luxury Heritage Enclave",
+        city: "Surat",
+        state: "Gujarat",
+        zip: "395007"
+      },
+      payment: { method: "Razorpay" }
+    }
+  }
+];
+
 // Mock In-Memory Databases for Mock Mode
 let mockCart = {}; 
 let mockUsers = [];
-let mockOrders = [];
+let mockOrders = [...initialSeedOrders];
 let mockFeedback = [];
 let mockNotifications = [];
 
