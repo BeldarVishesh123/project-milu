@@ -2222,8 +2222,10 @@ export default function App() {
                         {/* Rating & Reviews */}
                         <div className="rating-row">
                           <span className="stars">
-                            {'★'.repeat(Math.floor(p.rating || 5))}
-                            {'☆'.repeat(5 - Math.floor(p.rating || 5))}
+                            {(() => {
+                              const starCount = Math.max(0, Math.min(5, Math.floor(Number(p.rating) || 5)));
+                              return '★'.repeat(starCount) + '☆'.repeat(5 - starCount);
+                            })()}
                           </span>
                           <span className="reviews">({p.review_count || 0} reviews)</span>
                         </div>
@@ -3399,11 +3401,12 @@ export default function App() {
                       </div>
                     ) : (
                       <div className="responsive-wishlist-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        {wishlist.map(item => {
-                          const p = products.find(prod => prod.id === item.id);
+                        {wishlist.map((item, idx) => {
+                          const targetId = typeof item === 'object' ? (item?.id || item?.productId) : item;
+                          const p = products.find(prod => String(prod.id) === String(targetId) || Number(prod.id) === Number(targetId));
                           if (!p) return null;
                           return (
-                            <div key={item.id} className="glass-panel" style={{ padding: '12px', display: 'flex', gap: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.3)', border: '1px solid var(--glass-border)' }}>
+                            <div key={p.id || idx} className="glass-panel" style={{ padding: '12px', display: 'flex', gap: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.3)', border: '1px solid var(--glass-border)' }}>
                               <img src={p.image_url} alt={p.name} style={{ width: '60px', height: '60px', objectFit: 'contain' }} />
                               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                                 <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--ink)' }}>{p.name}</span>
