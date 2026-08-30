@@ -2728,6 +2728,37 @@ app.post('/api/payment/verify-razorpay', async (req, res) => {
         return res.status(500).json({ error: 'Razorpay payment verification failed.', details: err.message });
     }
 });
+// 6.45. Get Single Order Details by Order ID
+app.get('/api/orders/detail/:orderId', async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        let foundOrder = mockOrders.find(o => String(o.id) === String(orderId) || String(o._id) === String(orderId));
+
+        if (!foundOrder && isMongoConnected) {
+            try {
+                foundOrder = await OrderModel.findOne({ $or: [{ id: orderId }, { _id: orderId }] });
+            } catch (dbErr) {
+                console.error('[MONGODB SINGLE ORDER LOOKUP ERROR]', dbErr.message);
+            }
+        }
+
+        if (!foundOrder) {
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
+
+        const rawDoc = foundOrder.toObject ? foundOrder.toObject() : foundOrder;
+        const normalized = {
+            ...rawDoc,
+            id: rawDoc.id || rawDoc._id || orderId,
+            orderId: rawDoc.id || rawDoc._id || orderId
+        };
+
+        return res.json({ success: true, order: normalized });
+    } catch (err) {
+        console.error('[GET SINGLE ORDER ERROR]', err.message);
+        return res.status(500).json({ success: false, error: 'Failed to retrieve order details' });
+    }
+});
 
 // 6.5. Get User Orders
 app.get('/api/orders/:userId', async (req, res) => {

@@ -28,7 +28,8 @@ const getInitialPage = () => {
   if (pathname === '/refund-policy' || pageParam === 'refund-policy') return 'refund-policy';
   if (pathname === '/shipping-policy' || pageParam === 'shipping-policy') return 'shipping-policy';
   if (pathname === '/checkout' || pageParam === 'checkout') return 'checkout';
-  if (pathname === '/orders' || pageParam === 'orders') return 'orders';
+  if (pathname === '/orders' || pathname === '/my-orders' || pageParam === 'orders' || pageParam === 'my-orders') return 'orders';
+  if (pathname === '/order-success' || pageParam === 'order-success') return 'order-details';
   if (pathname === '/order-details' || pageParam === 'order-details') return 'order-details';
   if (pathname === '/track-order' || pageParam === 'track-order') return 'track-order';
   if (pathname === '/wishlist' || pageParam === 'wishlist') return 'wishlist';
@@ -316,6 +317,8 @@ export default function App() {
     return false;
   };
 
+  const getOrderId = (ord) => ord?.id || ord?._id || ord?.orderId;
+
   const getPathForPage = (pageName, params = {}) => {
     const prod = params.product || selectedProduct;
     const ord = params.order || activeOrder;
@@ -333,14 +336,25 @@ export default function App() {
       case 'shipping-policy': return '/shipping-policy';
       case 'checkout': return '/checkout';
       case 'orders': return '/orders';
-      case 'order-details': return ord ? `/order-details?id=${ord.id}` : '/orders';
-      case 'track-order': return ord ? `/track-order?id=${ord.id}` : '/orders';
+      case 'my-orders': return '/orders';
+      case 'order-success': {
+        const oId = getOrderId(ord);
+        return oId ? `/order-details?id=${oId}` : '/orders';
+      }
+      case 'order-details': {
+        const oId = getOrderId(ord);
+        return oId ? `/order-details?id=${oId}` : '/orders';
+      }
+      case 'track-order': {
+        const oId = getOrderId(ord);
+        return oId ? `/track-order?id=${oId}` : '/orders';
+      }
       case 'wishlist': return '/wishlist';
       case 'profile': return '/profile';
       case 'addresses': return '/addresses';
       case 'payments': return '/payments';
       case 'settings': return '/settings';
-      case 'product-details': return prod ? `/product-details?id=${prod.id}` : '/category';
+      case 'product-details': return prod ? `/product-details?id=${prod.id}` : '/';
       case 'admin': return '/admin';
       default: return '/';
     }
@@ -534,24 +548,40 @@ export default function App() {
     const initialPage = params.get('page') || window.location.pathname.replace(/^\//, '');
     const initialId = params.get('id');
 
-    if (initialId) {
+    if (initialId && initialId !== 'undefined') {
       if ((initialPage === 'product-details' || window.location.pathname === '/product-details') && products.length > 0) {
         const found = products.find(p => String(p.id) === String(initialId));
         if (found) setSelectedProduct(found);
-      } else if (initialPage === 'order-details' || initialPage === 'track-order' || window.location.pathname === '/order-details' || window.location.pathname === '/track-order') {
-        let found = userOrders.find(o => String(o.id) === String(initialId));
+      } else if (initialPage === 'order-details' || initialPage === 'order-success' || initialPage === 'track-order' || window.location.pathname.includes('order')) {
+        let found = userOrders.find(o => String(o.id) === String(initialId) || String(o._id) === String(initialId));
         if (!found) {
           const cached = localStorage.getItem('krishiv_last_order');
           if (cached) {
             try {
               const parsed = JSON.parse(cached);
-              if (!initialId || String(parsed.id) === String(initialId)) {
+              const pId = parsed?.id || parsed?._id || parsed?.orderId;
+              if (pId && String(pId) === String(initialId)) {
                 found = parsed;
               }
             } catch (e) {}
           }
         }
-        if (found) setActiveOrder(found);
+        if (found) {
+          setActiveOrder(found);
+        } else {
+          // Asynchronously fetch single order directly from database endpoint
+          fetch(`${API_BASE_URL}/orders/detail/${initialId}`)
+            .then(res => res.json())
+            .then(data => {
+              if (data.success && data.order) {
+                setActiveOrder(data.order);
+                try {
+                  localStorage.setItem('krishiv_last_order', JSON.stringify(data.order));
+                } catch (e) {}
+              }
+            })
+            .catch(err => console.warn('Database order resolution note:', err.message));
+        }
       }
     }
   }, [products, userOrders]);
@@ -3869,8 +3899,9 @@ export default function App() {
                   <ShieldAlert style={{ width: '64px', height: '64px', color: 'var(--clay)', margin: '0 auto 16px' }} />
                   <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '24px', color: 'var(--ink)', marginBottom: '8px' }}>No Active Orders</h3>
                   <p style={{ fontSize: '13px', color: 'var(--ink-soft)', marginBottom: '24px' }}>You haven't placed any orders yet. Explore our natural cosmetic products and place your first order!</p>
-                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                    <button onClick={() => changePage('category')} className="btn-primary" style={{ padding: '12px 24px', fontSize: '12px' }}>Browse Collection</button>
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <button onClick={() => changePage('orders')} className="btn-primary" style={{ padding: '12px 24px', fontSize: '12px' }}>View My Orders</button>
+                    <button onClick={() => changePage('home')} className="btn-secondary" style={{ padding: '12px 24px', fontSize: '12px' }}>Return Home</button>
                   </div>
                 </div>
               </div>
