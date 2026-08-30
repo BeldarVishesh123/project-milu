@@ -346,21 +346,32 @@ export default function App() {
     if (extraParams.category) setSelectedCategory(extraParams.category);
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem('krishiv_current_page', newPage);
-      if (extraParams.product) {
-        localStorage.setItem('krishiv_last_product', JSON.stringify(extraParams.product));
-      }
-      if (extraParams.order) {
-        localStorage.setItem('krishiv_last_order', JSON.stringify(extraParams.order));
-      }
+      try {
+        localStorage.setItem('krishiv_current_page', newPage);
+        if (extraParams.product) {
+          localStorage.setItem('krishiv_last_product', JSON.stringify(extraParams.product));
+        }
+        if (extraParams.order) {
+          localStorage.setItem('krishiv_last_order', JSON.stringify(extraParams.order));
+        }
+      } catch (e) {}
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
 
       if (pushToHistory) {
-        const targetPath = getPathForPage(newPage, extraParams);
-        const currentPath = window.location.pathname + window.location.search;
-        if (currentPath !== targetPath && !window.location.pathname.startsWith('/admin')) {
-          window.history.pushState({ page: newPage, ...extraParams }, document.title, targetPath);
+        try {
+          const targetPath = getPathForPage(newPage, extraParams);
+          const currentPath = window.location.pathname + window.location.search;
+          if (currentPath !== targetPath && !window.location.pathname.startsWith('/admin')) {
+            const historyState = {
+              page: newPage,
+              id: extraParams.order?.id || extraParams.product?.id || extraParams.id || null,
+              category: extraParams.category || null
+            };
+            window.history.pushState(historyState, document.title, targetPath);
+          }
+        } catch (hErr) {
+          console.warn('Browser history pushState note:', hErr.message);
         }
       }
     }
@@ -1445,34 +1456,43 @@ export default function App() {
 
   const executeCodOrder = async (shippingDetails) => {
     try {
+      setShowCodConfirmModal(false);
       const res = await fetch(`${API_BASE_URL}/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: user?.id,
+          userId: user?.id || 'guest',
           items: cart,
-          shipping: shippingDetails,
+          shipping: shippingDetails || {},
           payment: { method: 'Cash on Delivery (COD)' }
         }),
       });
 
       const data = await res.json();
       if (data.success && data.order) {
-        setActiveOrder(data.order);
-        localStorage.setItem('krishiv_last_order', JSON.stringify(data.order));
+        const createdOrder = data.order;
+        setActiveOrder(createdOrder);
+        try {
+          localStorage.setItem('krishiv_last_order', JSON.stringify(createdOrder));
+        } catch (e) {}
         setCheckoutSuccess(true);
         setCart([]);
         syncCart([]);
         fetchUserOrders();
-        setShowCodConfirmModal(false);
         setPendingCodShipping(null);
-        changePage('order-details', { order: data.order });
+        changePage('order-details', { order: createdOrder });
         showToast('🎉 Cash on Delivery Order Placed Successfully!');
       } else {
+        alert(data.error || 'Failed to place order.');
         showToast(data.error || 'Failed to place order.');
       }
     } catch (err) {
+      console.error('COD Order Execution Error:', err);
+      alert('Connection error. Failed to place order. Please try again.');
       showToast('Connection error. Failed to place order.');
+    } finally {
+      setShowCodConfirmModal(false);
+      setPendingCodShipping(null);
     }
   };
 
