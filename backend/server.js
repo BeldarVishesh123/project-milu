@@ -2894,6 +2894,10 @@ const handleCancelOrderReq = async (req, res) => {
         return res.json({ success: true, message: 'Order is already cancelled.', order: targetOrder });
     }
 
+    if (['shipped', 'out_for_delivery', 'delivered'].includes(targetOrder.status)) {
+        return res.status(400).json({ error: 'Order cannot be cancelled after it has been shipped or delivered.' });
+    }
+
     // 1. Restock item quantities back to inventory
     const cartItems = targetOrder.items?.cartItems || (Array.isArray(targetOrder.items) ? targetOrder.items : []);
     if (Array.isArray(cartItems)) {

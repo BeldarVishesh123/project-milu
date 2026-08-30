@@ -4640,50 +4640,58 @@ export default function App() {
       </div>
 
       {/* COD Confirmation Modal */}
-      {showCodConfirmModal && pendingCodShipping && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '16px' }}>
-          <div style={{ background: '#FFFFFF', borderRadius: '16px', maxWidth: '480px', width: '100%', padding: '24px', border: '1px solid var(--cream-deep)', boxShadow: '0 20px 50px rgba(0,0,0,0.25)' }}>
-            <div style={{ fontSize: '18px', fontWeight: '800', color: 'var(--ink)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              📦 Confirm Cash on Delivery Order
-            </div>
-            <p style={{ fontSize: '13px', color: 'var(--ink-soft)', lineHeight: '1.5', margin: '0 0 16px 0' }}>
-              Please review and confirm your <strong>Cash on Delivery (COD)</strong> order details below:
-            </p>
-            <div style={{ background: '#FAF7EE', padding: '14px', borderRadius: '10px', border: '1px solid var(--cream-deep)', marginBottom: '16px', fontSize: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ color: 'var(--ink-soft)' }}>Recipient Name:</span>
-                <strong style={{ color: 'var(--ink)' }}>{pendingCodShipping.name}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ color: 'var(--ink-soft)' }}>Contact Phone:</span>
-                <strong style={{ color: 'var(--ink)' }}>{pendingCodShipping.phone}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ color: 'var(--ink-soft)' }}>Total Amount Payable:</span>
-                <strong style={{ color: 'var(--ink)', fontSize: '14px' }}>₹{cartTotal.grandTotal}</strong>
-              </div>
-              <div style={{ fontSize: '11px', color: '#b91c1c', marginTop: '10px', borderTop: '1px dashed #fca5a5', paddingTop: '8px', lineHeight: '1.4' }}>
-                ⚠️ <strong>Notice:</strong> Per Krishiv Corporation policy, orders placed via COD cannot be cancelled after confirmation.
-              </div>
-            </div>
+      {showCodConfirmModal && pendingCodShipping && (() => {
+        const codSubtotal = (Array.isArray(cart) ? cart : []).reduce((sum, item) => {
+          const p = (Array.isArray(products) ? products : []).find(prod => prod.id === item.productId);
+          return sum + (p ? (p.price || 0) * (item.quantity || 1) : 0);
+        }, 0);
+        const codCalc = calculateClientShipping(codSubtotal, pendingCodShipping.state || shippingState, 'COD', storeSettings);
 
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button 
-                onClick={() => { setShowCodConfirmModal(false); setPendingCodShipping(null); }}
-                style={{ padding: '10px 18px', borderRadius: '8px', border: '1px solid var(--cream-deep)', background: '#f8fafc', color: 'var(--ink)', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
-              >
-                Go Back
-              </button>
-              <button 
-                onClick={() => executeCodOrder(pendingCodShipping)}
-                style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', background: 'var(--clay)', color: '#fff', fontSize: '12px', fontWeight: '800', cursor: 'pointer' }}
-              >
-                Confirm & Place COD Order
-              </button>
+        return (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '16px' }}>
+            <div style={{ background: '#FFFFFF', borderRadius: '16px', maxWidth: '480px', width: '100%', padding: '24px', border: '1px solid var(--cream-deep)', boxShadow: '0 20px 50px rgba(0,0,0,0.25)' }}>
+              <div style={{ fontSize: '18px', fontWeight: '800', color: 'var(--ink)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                📦 Confirm Cash on Delivery Order
+              </div>
+              <p style={{ fontSize: '13px', color: 'var(--ink-soft)', lineHeight: '1.5', margin: '0 0 16px 0' }}>
+                Please review and confirm your <strong>Cash on Delivery (COD)</strong> order details below:
+              </p>
+              <div style={{ background: '#FAF7EE', padding: '14px', borderRadius: '10px', border: '1px solid var(--cream-deep)', marginBottom: '16px', fontSize: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ color: 'var(--ink-soft)' }}>Recipient Name:</span>
+                  <strong style={{ color: 'var(--ink)' }}>{pendingCodShipping.name}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ color: 'var(--ink-soft)' }}>Contact Phone:</span>
+                  <strong style={{ color: 'var(--ink)' }}>{pendingCodShipping.phone}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ color: 'var(--ink-soft)' }}>Total Amount Payable:</span>
+                  <strong style={{ color: 'var(--ink)', fontSize: '14px' }}>₹{codCalc.grandTotal}</strong>
+                </div>
+                <div style={{ fontSize: '11px', color: '#b91c1c', marginTop: '10px', borderTop: '1px dashed #fca5a5', paddingTop: '8px', lineHeight: '1.4' }}>
+                  ⚠️ <strong>Notice:</strong> Per Krishiv Corporation policy, orders placed via COD cannot be cancelled after confirmation.
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button 
+                  onClick={() => { setShowCodConfirmModal(false); setPendingCodShipping(null); }}
+                  style={{ padding: '10px 18px', borderRadius: '8px', border: '1px solid var(--cream-deep)', background: '#f8fafc', color: 'var(--ink)', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
+                >
+                  Go Back
+                </button>
+                <button 
+                  onClick={() => executeCodOrder(pendingCodShipping)}
+                  style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', background: 'var(--clay)', color: '#fff', fontSize: '12px', fontWeight: '800', cursor: 'pointer' }}
+                >
+                  Confirm & Place COD Order
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
