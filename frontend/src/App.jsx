@@ -191,7 +191,14 @@ export default function App() {
   const [paymentMethod, setPaymentMethod] = useState('razorpay');
   const [showCodConfirmModal, setShowCodConfirmModal] = useState(false);
   const [pendingCodShipping, setPendingCodShipping] = useState(null);
-  const [activeOrder, setActiveOrder] = useState(null);
+  const [activeOrder, setActiveOrder] = useState(() => {
+    try {
+      const saved = localStorage.getItem('krishiv_last_order');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [userOrders, setUserOrders] = useState([]);
   const [tosAccepted, setTosAccepted] = useState(false);
   // Store settings & Shipping calculation state
@@ -3799,30 +3806,42 @@ export default function App() {
         )}
 
         {/* PAGE 9: ORDER DETAILS PAGE */}
-        {page === 'order-details' && (
-          !activeOrder ? (
-            <div style={{ padding: '60px 24px', textAlign: 'center', maxWidth: '500px', margin: '0 auto' }}>
-              <div className="glass-panel" style={{ padding: '40px', borderRadius: '18px', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
-                <ShieldAlert style={{ width: '64px', height: '64px', color: 'var(--clay)', margin: '0 auto 16px' }} />
-                <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '24px', color: 'var(--ink)', marginBottom: '8px' }}>Order Not Found</h3>
-                <p style={{ fontSize: '13px', color: 'var(--ink-soft)', marginBottom: '24px' }}>We couldn't retrieve the details for this order. Please try selecting an order from your account dashboard.</p>
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                  <button onClick={() => changePage('orders')} className="btn-primary" style={{ padding: '12px 24px', fontSize: '12px' }}>View My Orders</button>
-                  <button onClick={() => changePage('category')} className="btn-secondary" style={{ padding: '12px 24px', fontSize: '12px' }}>Browse Collection</button>
+        {page === 'order-details' && (() => {
+          const currentOrder = activeOrder || (() => {
+            try {
+              const cached = localStorage.getItem('krishiv_last_order');
+              if (cached) return JSON.parse(cached);
+            } catch (e) {}
+            return userOrders.length > 0 ? userOrders[0] : null;
+          })();
+
+          if (!currentOrder) {
+            return (
+              <div style={{ padding: '60px 24px', textAlign: 'center', maxWidth: '500px', margin: '0 auto' }}>
+                <div className="glass-panel" style={{ padding: '40px', borderRadius: '18px', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                  <ShieldAlert style={{ width: '64px', height: '64px', color: 'var(--clay)', margin: '0 auto 16px' }} />
+                  <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '24px', color: 'var(--ink)', marginBottom: '8px' }}>No Active Orders</h3>
+                  <p style={{ fontSize: '13px', color: 'var(--ink-soft)', marginBottom: '24px' }}>You haven't placed any orders yet. Explore our natural cosmetic products and place your first order!</p>
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                    <button onClick={() => changePage('category')} className="btn-primary" style={{ padding: '12px 24px', fontSize: '12px' }}>Browse Collection</button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : (
+            );
+          }
+
+          const isCancelled = currentOrder.status === 'cancelled';
+          const itemsList = Array.isArray(currentOrder.items) 
+            ? currentOrder.items 
+            : (currentOrder.items?.cartItems || []);
+          const shippingInfo = currentOrder.items?.shipping || currentOrder.shipping || {};
+          const payRaw = currentOrder.items?.payment || currentOrder.paymentMethod || 'COD';
+          const paymentMethodName = (typeof payRaw === 'string' ? payRaw : (payRaw?.method || 'cod')).toString().toLowerCase();
+          const isOnlinePayment = paymentMethodName.includes('card') || paymentMethodName.includes('online') || paymentMethodName.includes('razorpay');
+
+          return (
             <div className="order-details-container" style={{ padding: '40px 24px', maxWidth: '900px', margin: '0 auto', width: '100%' }}>
               {(() => {
-                const isCancelled = activeOrder.status === 'cancelled';
-                const itemsList = Array.isArray(activeOrder.items) 
-                  ? activeOrder.items 
-                  : (activeOrder.items?.cartItems || []);
-                const shippingInfo = activeOrder.items?.shipping || {};
-                const payRaw = activeOrder.items?.payment;
-                const paymentMethodName = (typeof payRaw === 'string' ? payRaw : (payRaw?.method || 'cod')).toString().toLowerCase();
-                const isOnlinePayment = paymentMethodName.includes('card') || paymentMethodName.includes('online') || paymentMethodName.includes('razorpay');
                 
                 const subtotal = itemsList.reduce((sum, item) => {
                   const pId = Number(item.productId || item.id);
@@ -3833,7 +3852,7 @@ export default function App() {
                 const tax = Math.round(subtotal * 0.05);
                 const discount = 0;
 
-                const isCancellable = !isCancelled && !['shipped', 'out_for_delivery', 'delivered'].includes(activeOrder.status?.toLowerCase());
+                const isCancellable = !isCancelled && !['shipped', 'out_for_delivery', 'delivered'].includes(currentOrder.status?.toLowerCase());
 
                 return (
                   <div className="glass-panel" style={{ padding: '30px', borderRadius: '18px', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -3861,17 +3880,17 @@ export default function App() {
                     <div className="responsive-order-meta" style={{ display: 'grid', gridTemplateColumns: isCancelled ? '1fr 1fr 1fr 1fr' : '1fr 1fr 1fr', gap: '16px', background: 'rgba(255,255,255,0.4)', padding: '16px', borderRadius: '12px', border: '1px solid var(--glass-border)', fontSize: '12.5px' }}>
                       <div>
                         <span style={{ color: 'var(--ink-soft)', fontWeight: '700', fontSize: '10.5px', display: 'block', marginBottom: '2px' }}>ORDER ID</span>
-                        <span style={{ fontWeight: '700', color: 'var(--ink)', fontFamily: 'monospace', fontSize: '13px' }}>{activeOrder.id}</span>
+                        <span style={{ fontWeight: '700', color: 'var(--ink)', fontFamily: 'monospace', fontSize: '13px' }}>{currentOrder.id}</span>
                       </div>
                       <div>
                         <span style={{ color: 'var(--ink-soft)', fontWeight: '700', fontSize: '10.5px', display: 'block', marginBottom: '2px' }}>ORDER DATE</span>
-                        <span style={{ fontWeight: '700', color: 'var(--ink)' }}>{activeOrder.created_at ? new Date(activeOrder.created_at).toLocaleString() : new Date().toLocaleString()}</span>
+                        <span style={{ fontWeight: '700', color: 'var(--ink)' }}>{currentOrder.created_at ? new Date(currentOrder.created_at).toLocaleString() : new Date().toLocaleString()}</span>
                       </div>
                       {isCancelled ? (
                         <>
                           <div>
                             <span style={{ color: 'var(--ink-soft)', fontWeight: '700', fontSize: '10.5px', display: 'block', marginBottom: '2px' }}>CANCELLED DATE</span>
-                            <span style={{ fontWeight: '700', color: 'var(--clay)' }}>{activeOrder.cancelled_at ? new Date(activeOrder.cancelled_at).toLocaleString() : 'Recently'}</span>
+                            <span style={{ fontWeight: '700', color: 'var(--clay)' }}>{currentOrder.cancelled_at ? new Date(currentOrder.cancelled_at).toLocaleString() : 'Recently'}</span>
                           </div>
                           <div>
                             <span style={{ color: 'var(--ink-soft)', fontWeight: '700', fontSize: '10.5px', display: 'block', marginBottom: '2px' }}>REASON</span>
@@ -3883,7 +3902,7 @@ export default function App() {
                           <span style={{ color: 'var(--ink-soft)', fontWeight: '700', fontSize: '10.5px', display: 'block', marginBottom: '2px' }}>ESTIMATED DELIVERY</span>
                           <span style={{ fontWeight: '700', color: 'var(--sage)' }}>
                             {(() => {
-                              const d = activeOrder.created_at ? new Date(activeOrder.created_at) : new Date();
+                              const d = currentOrder.created_at ? new Date(currentOrder.created_at) : new Date();
                               d.setDate(d.getDate() + 4);
                               return d.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
                             })()}
@@ -3897,7 +3916,7 @@ export default function App() {
                       <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', padding: '16px', borderRadius: '12px', fontSize: '13px', color: '#991b1b' }}>
                         <h4 style={{ margin: '0 0 4px', fontWeight: '700', fontSize: '13.5px' }}>Refund & Status Details</h4>
                         {isOnlinePayment ? (
-                          <p style={{ margin: 0 }}>Your refund of ₹{activeOrder.total} has been initiated. Refund will be processed back to your original payment method within 5–7 business days.</p>
+                          <p style={{ margin: 0 }}>Your refund of ₹{currentOrder.total} has been initiated. Refund will be processed back to your original payment method within 5–7 business days.</p>
                         ) : (
                           <p style={{ margin: 0 }}>Order cancelled successfully. Since this order was Cash on Delivery (COD), no payment was collected.</p>
                         )}
@@ -3906,14 +3925,14 @@ export default function App() {
 
                     {/* Visual Tracker Timeline (Only for Active Orders) */}
                     {!isCancelled && (() => {
-                      const currentStatus = (activeOrder.status || 'placed').toLowerCase();
+                      const currentStatus = (currentOrder.status || 'placed').toLowerCase();
                       const statusRanks = { placed: 0, confirmed: 1, preparing: 2, packed: 3, shipped: 4, out_for_delivery: 5, delivered: 6 };
                       const currentRank = statusRanks[currentStatus] !== undefined ? statusRanks[currentStatus] : 1;
                       const progressPercent = Math.min(100, Math.max(15, Math.round(((currentRank + 1) / 7) * 100)));
 
                       return (
                         <div>
-                          <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--ink)', marginBottom: '16px' }}>Order Status: <span style={{ color: 'var(--sage)', textTransform: 'uppercase' }}>{(activeOrder.status || 'placed').replace(/_/g, ' ')}</span></h3>
+                          <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--ink)', marginBottom: '16px' }}>Order Status: <span style={{ color: 'var(--sage)', textTransform: 'uppercase' }}>{(currentOrder.status || 'placed').replace(/_/g, ' ')}</span></h3>
                           <div className="responsive-order-stepper" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', padding: '0 10px' }}>
                             <div style={{ position: 'absolute', top: '15px', left: '30px', right: '30px', height: '4px', background: 'var(--cream-deep)', zIndex: 1 }}></div>
                             <div style={{ position: 'absolute', top: '15px', left: '30px', width: `${progressPercent}%`, height: '4px', background: 'var(--sage)', zIndex: 2, transition: 'width 0.4s ease' }}></div>
@@ -4017,7 +4036,7 @@ export default function App() {
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14.5px', fontWeight: '700', color: 'var(--ink)', borderTop: '1.5px solid var(--cream-deep)', paddingTop: '8px', marginTop: '4px' }}>
                             <span>Grand Total</span>
-                            <span>₹{activeOrder.total}</span>
+                            <span>₹{currentOrder.total}</span>
                           </div>
                         </div>
                       </div>
@@ -4026,7 +4045,7 @@ export default function App() {
                     {/* Action Buttons */}
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '16px', flexWrap: 'wrap' }}>
                       {!isCancelled && (
-                        <button onClick={() => changePage('track-order', { order: activeOrder })} className="btn-primary" style={{ padding: '12px 24px', fontSize: '12px' }}>Track Order</button>
+                        <button onClick={() => changePage('track-order', { order: currentOrder })} className="btn-primary" style={{ padding: '12px 24px', fontSize: '12px' }}>Track Order</button>
                       )}
                       <button onClick={handleDownloadInvoice} className="btn-secondary" style={{ padding: '12px 24px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <CreditCard style={{ width: '14px', height: '14px' }} /> Download Invoice
@@ -4039,26 +4058,38 @@ export default function App() {
                 );
               })()}
             </div>
-          )
-        )}
+          );
+        })()}
 
         {/* PAGE 10: TRACK ORDER PAGE */}
-        {page === 'track-order' && (
-          !activeOrder ? (
-            <div style={{ padding: '60px 24px', textAlign: 'center', maxWidth: '500px', margin: '0 auto' }}>
-              <div className="glass-panel" style={{ padding: '40px', borderRadius: '18px', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
-                <ShieldAlert style={{ width: '64px', height: '64px', color: 'var(--clay)', margin: '0 auto 16px' }} />
-                <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '24px', color: 'var(--ink)', marginBottom: '8px' }}>Order Tracking Unavailable</h3>
-                <p style={{ fontSize: '13px', color: 'var(--ink-soft)', marginBottom: '24px' }}>Please select a valid order from your Account Dashboard to track its status.</p>
-                <button onClick={() => changePage('orders')} className="btn-primary" style={{ padding: '12px 24px', fontSize: '12px' }}>View My Orders</button>
+        {page === 'track-order' && (() => {
+          const currentTrackOrder = activeOrder || (() => {
+            try {
+              const cached = localStorage.getItem('krishiv_last_order');
+              if (cached) return JSON.parse(cached);
+            } catch (e) {}
+            return userOrders.length > 0 ? userOrders[0] : null;
+          })();
+
+          if (!currentTrackOrder) {
+            return (
+              <div style={{ padding: '60px 24px', textAlign: 'center', maxWidth: '500px', margin: '0 auto' }}>
+                <div className="glass-panel" style={{ padding: '40px', borderRadius: '18px', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}>
+                  <ShieldAlert style={{ width: '64px', height: '64px', color: 'var(--clay)', margin: '0 auto 16px' }} />
+                  <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '24px', color: 'var(--ink)', marginBottom: '8px' }}>Order Tracking Unavailable</h3>
+                  <p style={{ fontSize: '13px', color: 'var(--ink-soft)', marginBottom: '24px' }}>Please select a valid order from your Account Dashboard to track its status.</p>
+                  <button onClick={() => changePage('orders')} className="btn-primary" style={{ padding: '12px 24px', fontSize: '12px' }}>View My Orders</button>
+                </div>
               </div>
-            </div>
-          ) : (
+            );
+          }
+
+          return (
             <div className="track-order-container" style={{ padding: '40px 24px', maxWidth: '650px', margin: '0 auto', width: '100%' }}>
               <div className="glass-panel" style={{ padding: '30px', borderRadius: '18px', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1.5px solid var(--cream-deep)', paddingBottom: '16px' }}>
-                  <button onClick={() => changePage('order-details', { order: activeOrder })} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px', color: 'var(--ink)' }}>
+                  <button onClick={() => changePage('order-details', { order: currentTrackOrder })} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px', color: 'var(--ink)' }}>
                     <ArrowLeft style={{ width: '20px', height: '20px' }} />
                   </button>
                   <h2 style={{ fontFamily: 'Playfair Display, serif', fontSize: '24px', color: 'var(--ink)', margin: 0 }}>Track Order</h2>
@@ -4068,30 +4099,30 @@ export default function App() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', background: 'rgba(255,255,255,0.3)', padding: '12px 16px', borderRadius: '10px' }}>
                   <div>
                     <span style={{ color: 'var(--ink-soft)', display: 'block', fontSize: '10.5px', fontWeight: '700' }}>ORDER ID</span>
-                    <span style={{ fontFamily: 'monospace', fontWeight: '700', color: 'var(--ink)' }}>{activeOrder.id}</span>
+                    <span style={{ fontFamily: 'monospace', fontWeight: '700', color: 'var(--ink)' }}>{currentTrackOrder.id}</span>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <span style={{ color: 'var(--ink-soft)', display: 'block', fontSize: '10.5px', fontWeight: '700' }}>STATUS</span>
-                    <span style={{ fontWeight: '700', color: (activeOrder.trackingId || activeOrder.tracking_id || activeOrder.status === 'on_estimate') ? '#10b981' : 'var(--sage)', textTransform: 'uppercase' }}>
-                      {(activeOrder.trackingId || activeOrder.tracking_id || activeOrder.status === 'on_estimate') ? 'ON ESTIMATE (IN TRANSIT)' : (activeOrder.status || 'PLACED').toUpperCase()}
+                    <span style={{ fontWeight: '700', color: (currentTrackOrder.trackingId || currentTrackOrder.tracking_id || currentTrackOrder.status === 'on_estimate') ? '#10b981' : 'var(--sage)', textTransform: 'uppercase' }}>
+                      {(currentTrackOrder.trackingId || currentTrackOrder.tracking_id || currentTrackOrder.status === 'on_estimate') ? 'ON ESTIMATE (IN TRANSIT)' : (currentTrackOrder.status || 'PLACED').toUpperCase()}
                     </span>
                   </div>
                 </div>
 
                 {/* India Post Tracking Card (If Admin attached tracking ID) */}
-                {(activeOrder.trackingId || activeOrder.tracking_id) && (
+                {(currentTrackOrder.trackingId || currentTrackOrder.tracking_id) && (
                   <div style={{ background: '#f0fdf4', border: '1.5px solid #86efac', padding: '18px 20px', borderRadius: '14px', textAlign: 'center' }}>
                     <div style={{ fontSize: '11px', fontWeight: '800', color: '#15803d', textTransform: 'uppercase', letterSpacing: '1px' }}>
                       📮 India Post Tracking Consignment ID
                     </div>
                     <div style={{ fontSize: '20px', fontWeight: '800', color: '#166534', fontFamily: 'monospace', margin: '8px 0', letterSpacing: '2px' }}>
-                      {activeOrder.trackingId || activeOrder.tracking_id}
+                      {currentTrackOrder.trackingId || currentTrackOrder.tracking_id}
                     </div>
                     <p style={{ fontSize: '12px', color: '#15803d', margin: '0 0 12px' }}>
                       Estimated Delivery: 3 – 5 Business Days via India Post
                     </p>
                     <a 
-                      href={activeOrder.trackingUrl || "https://www.indiapost.gov.in/"} 
+                      href={currentTrackOrder.trackingUrl || "https://www.indiapost.gov.in/"} 
                       target="_blank" 
                       rel="noopener noreferrer" 
                       className="btn-primary" 
@@ -4105,9 +4136,9 @@ export default function App() {
                 {/* Stepper */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', padding: '10px 0 10px 20px', position: 'relative' }}>
                   {(() => {
-                    const currentStatus = (activeOrder.status || 'placed').toLowerCase();
+                    const currentStatus = (currentTrackOrder.status || 'placed').toLowerCase();
                     const statusRanks = { placed: 0, confirmed: 1, preparing: 2, packed: 3, shipped: 4, on_estimate: 5, out_for_delivery: 5, delivered: 6 };
-                    const currentRank = (activeOrder.trackingId || activeOrder.tracking_id) ? 5 : (statusRanks[currentStatus] !== undefined ? statusRanks[currentStatus] : 1);
+                    const currentRank = (currentTrackOrder.trackingId || currentTrackOrder.tracking_id) ? 5 : (statusRanks[currentStatus] !== undefined ? statusRanks[currentStatus] : 1);
                     const progressHeight = Math.min(100, Math.max(15, Math.round(((currentRank + 1) / 7) * 100)));
 
                     const trackingSteps = [
@@ -4169,15 +4200,15 @@ export default function App() {
                 </div>
 
                 <div style={{ display: 'flex', gap: '12px' }}>
-                  <button onClick={() => changePage('order-details', { order: activeOrder })} className="btn-secondary" style={{ padding: '12px', width: '100%', fontSize: '12px' }}>
+                  <button onClick={() => changePage('order-details', { order: currentTrackOrder })} className="btn-secondary" style={{ padding: '12px', width: '100%', fontSize: '12px' }}>
                     Back to Order Details
                   </button>
                 </div>
 
               </div>
             </div>
-          )
-        )}
+          );
+        })()}
 
 
 
