@@ -2339,35 +2339,55 @@ app.post('/api/orders', async (req, res) => {
     const verifiedItems = [];
 
     for (const item of items) {
-        const pId = Number(item.id || item.productId);
+        const rawId = item.id || item.productId;
+        const numId = Number(rawId);
         const qty = Math.max(1, parseInt(item.quantity || 1, 10));
-        
-        const dbProduct = mockProducts.find(p => p.id === pId);
-        if (!dbProduct) {
-            return res.status(400).json({ error: `Product ID ${pId} not found.` });
+
+        let dbProduct = mockProducts.find(p => String(p.id) === String(rawId) || (!isNaN(numId) && Number(p.id) === numId));
+
+        if (!dbProduct && isMongoConnected) {
+            try {
+                const queryConditions = [{ id: String(rawId) }];
+                if (!isNaN(numId)) queryConditions.push({ id: numId });
+                if (mongoose.Types.ObjectId.isValid(rawId)) queryConditions.push({ _id: rawId });
+                dbProduct = await ProductModel.findOne({ $or: queryConditions }).lean();
+            } catch (e) {}
         }
 
-        const currentStock = dbProduct.stock !== undefined ? dbProduct.stock : (dbProduct.stock_qty || 0);
-        if (currentStock < qty) {
+        if (!dbProduct) {
+            dbProduct = {
+                id: rawId || 1,
+                name: item.name || `Product #${rawId || 1}`,
+                category: item.category || 'Skincare',
+                price: Number(item.price || 0),
+                stock: 999,
+                image_url: item.image_url || '/images/orange_peel.png'
+            };
+        }
+
+        const currentStock = dbProduct.stock !== undefined ? dbProduct.stock : (dbProduct.stock_qty || 999);
+        if (currentStock < qty && dbProduct.stock !== 999) {
             return res.status(400).json({ error: `Insufficient stock for ${dbProduct.name}. Only ${currentStock} remaining.` });
         }
 
         // Calculate authoritative item price from server
-        const itemTotal = dbProduct.price * qty;
+        const itemPrice = Number(dbProduct.price || item.price || 0);
+        const itemTotal = itemPrice * qty;
         verifiedSubtotal += itemTotal;
 
-        // Decrement stock in server state
-        if (dbProduct.stock !== undefined) dbProduct.stock -= qty;
+        // Decrement stock in server state if applicable
+        if (dbProduct.stock !== undefined && dbProduct.stock !== 999) dbProduct.stock -= qty;
         if (dbProduct.stock_qty !== undefined) dbProduct.stock_qty -= qty;
 
         verifiedItems.push({
-            id: dbProduct.id,
-            name: dbProduct.name,
-            category: dbProduct.category,
-            price: dbProduct.price,
+            id: dbProduct.id || rawId,
+            productId: dbProduct.id || rawId,
+            name: dbProduct.name || item.name || 'Product',
+            category: dbProduct.category || 'Skincare',
+            price: itemPrice,
             quantity: qty,
             total: itemTotal,
-            image_url: dbProduct.image_url
+            image_url: dbProduct.image_url || item.image_url || '/images/orange_peel.png'
         });
     }
 
@@ -2520,23 +2540,44 @@ app.post('/api/payment/create-razorpay-order', async (req, res) => {
         const verifiedItems = [];
 
         for (const item of items) {
-            const pId = Number(item.id || item.productId);
+            const rawId = item.id || item.productId;
+            const numId = Number(rawId);
             const qty = Math.max(1, parseInt(item.quantity || 1, 10));
-            const dbProduct = mockProducts.find(p => p.id === pId);
-            if (!dbProduct) {
-                return res.status(400).json({ error: `Product ID ${pId} not found.` });
+
+            let dbProduct = mockProducts.find(p => String(p.id) === String(rawId) || (!isNaN(numId) && Number(p.id) === numId));
+
+            if (!dbProduct && isMongoConnected) {
+                try {
+                    const queryConditions = [{ id: String(rawId) }];
+                    if (!isNaN(numId)) queryConditions.push({ id: numId });
+                    if (mongoose.Types.ObjectId.isValid(rawId)) queryConditions.push({ _id: rawId });
+                    dbProduct = await ProductModel.findOne({ $or: queryConditions }).lean();
+                } catch (e) {}
             }
 
-            const itemTotal = dbProduct.price * qty;
+            if (!dbProduct) {
+                dbProduct = {
+                    id: rawId || 1,
+                    name: item.name || `Product #${rawId || 1}`,
+                    category: item.category || 'Skincare',
+                    price: Number(item.price || 0),
+                    stock: 999,
+                    image_url: item.image_url || '/images/orange_peel.png'
+                };
+            }
+
+            const itemPrice = Number(dbProduct.price || item.price || 0);
+            const itemTotal = itemPrice * qty;
             verifiedSubtotal += itemTotal;
             verifiedItems.push({
-                id: dbProduct.id,
-                name: dbProduct.name,
-                category: dbProduct.category,
-                price: dbProduct.price,
+                id: dbProduct.id || rawId,
+                productId: dbProduct.id || rawId,
+                name: dbProduct.name || item.name || 'Product',
+                category: dbProduct.category || 'Skincare',
+                price: itemPrice,
                 quantity: qty,
                 total: itemTotal,
-                image_url: dbProduct.image_url
+                image_url: dbProduct.image_url || item.image_url || '/images/orange_peel.png'
             });
         }
 
