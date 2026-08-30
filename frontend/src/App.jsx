@@ -3370,7 +3370,7 @@ export default function App() {
                                   </span>
                                 </div>
                               </div>
-                              <div style={{ display: 'flex', gap: '8px' }}>
+                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                 <button 
                                   onClick={() => changePage('order-details', { order })}
                                   className="btn-secondary" 
@@ -3385,6 +3385,33 @@ export default function App() {
                                 >
                                   Track Order
                                 </button>
+                                {['placed', 'confirmed', 'preparing'].includes((order.status || 'placed').toLowerCase()) && (
+                                  <button 
+                                    onClick={async () => {
+                                      if (!window.confirm(`Are you sure you want to cancel Order #${order.id}?`)) return;
+                                      try {
+                                        const res = await fetch(`${API_BASE_URL}/orders/${order.id}/cancel`, {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ userId: user?.id })
+                                        });
+                                        const data = await res.json();
+                                        if (data.success) {
+                                          showToast('Order cancelled successfully.');
+                                          fetchUserOrders();
+                                        } else {
+                                          alert(data.error || 'Failed to cancel order.');
+                                        }
+                                      } catch (e) {
+                                        alert('Connection error. Could not cancel order.');
+                                      }
+                                    }}
+                                    className="btn-secondary" 
+                                    style={{ padding: '6px 12px', fontSize: '11px', color: '#dc2626', borderColor: '#fca5a5', background: '#fef2f2' }}
+                                  >
+                                    Cancel Order
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -4028,6 +4055,10 @@ export default function App() {
                           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--ink-soft)' }}>
                             <span>Delivery Charges</span>
                             <span>{subtotal > 500 ? 'FREE' : '₹50'}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--ink-soft)' }}>
+                            <span>Discount</span>
+                            <span style={{ color: 'var(--sage)' }}>-₹0</span>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--ink-soft)' }}>
                             <span>Tax ({subtotal > 0 && tax > 0 ? Math.round((tax / subtotal) * 100) : 18}% GST)</span>

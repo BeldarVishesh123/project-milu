@@ -2810,7 +2810,7 @@ app.get('/api/order/:orderId', async (req, res) => {
 });
 
 // 6.7. Cancel Order (Restock inventory + DB update + status notification)
-app.put('/api/orders/:orderId/cancel', async (req, res) => {
+const handleCancelOrderReq = async (req, res) => {
     const { orderId } = req.params;
     const { userId } = req.body || {};
     const cancelledAt = new Date().toISOString();
@@ -2881,7 +2881,10 @@ app.put('/api/orders/:orderId/cancel', async (req, res) => {
     console.log(`[ORDER CANCELLED] Order #${orderId} marked cancelled and inventory restocked!`);
 
     return res.json({ success: true, message: 'Order cancelled successfully', order: targetOrder });
-});
+};
+
+app.put('/api/orders/:orderId/cancel', handleCancelOrderReq);
+app.post('/api/orders/:orderId/cancel', handleCancelOrderReq);
 
 // 7. Customer Care Feedback Form (Sends Email Notification to Admin)
 app.post('/api/feedback', async (req, res) => {
