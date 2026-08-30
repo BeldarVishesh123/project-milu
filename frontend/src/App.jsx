@@ -3,7 +3,7 @@ import anime from 'animejs';
 import { 
   ShoppingBag, User, PhoneCall, ShieldCheck, HelpCircle, 
   WifiOff, ArrowLeft, RefreshCw, X, ChevronRight, CheckCircle, 
-  Trash2, ShieldAlert, BookOpen, Layers, FileText, Heart, ShoppingCart, Star, Eye, EyeOff, Lock, Mail, Phone, Check, AlertCircle, KeyRound, CreditCard, Menu, Bell
+  Trash2, ShieldAlert, BookOpen, Layers, FileText, Heart, ShoppingCart, Star, Eye, EyeOff, Lock, Mail, Phone, Check, AlertCircle, KeyRound, CreditCard, Menu, Bell, Loader2
 } from 'lucide-react';
 import AdminDashboard from './admin/AdminDashboard';
 
