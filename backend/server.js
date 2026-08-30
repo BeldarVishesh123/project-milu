@@ -1136,9 +1136,13 @@ app.get('/api/products', async (req, res) => {
             const dbProducts = await ProductModel.find().lean();
             if (dbProducts && dbProducts.length > 0) {
                 const map = new Map();
-                for (const p of [...mockProducts, ...dbProducts]) {
-                    const key = (p.id !== undefined && p.id !== null) ? String(p.id) : (p._id ? String(p._id) : String(p.name));
-                    map.set(key, p);
+                for (const p of mockProducts) {
+                    map.set(String(p.id), { ...p });
+                }
+                for (const p of dbProducts) {
+                    const key = String(p.id !== undefined && p.id !== null ? p.id : (p._id || p.name));
+                    const existing = map.get(key) || {};
+                    map.set(key, { ...existing, ...p });
                 }
                 productsList = Array.from(map.values());
             }
@@ -3275,9 +3279,13 @@ app.get('/api/admin/products', requireAdminAuth, async (req, res) => {
             const dbProducts = await ProductModel.find().lean();
             if (dbProducts && dbProducts.length > 0) {
                 const map = new Map();
-                for (const p of [...mockProducts, ...dbProducts]) {
-                    const key = (p.id !== undefined && p.id !== null) ? String(p.id) : (p._id ? String(p._id) : String(p.name));
-                    map.set(key, p);
+                for (const p of mockProducts) {
+                    map.set(String(p.id), { ...p });
+                }
+                for (const p of dbProducts) {
+                    const key = String(p.id !== undefined && p.id !== null ? p.id : (p._id || p.name));
+                    const existing = map.get(key) || {};
+                    map.set(key, { ...existing, ...p });
                 }
                 productsList = Array.from(map.values());
             }
@@ -3339,6 +3347,8 @@ app.put('/api/admin/products/:id', requireAdminAuth, async (req, res) => {
     const index = mockProducts.findIndex(p => String(p.id) === String(rawId) || String(p._id) === String(rawId) || (!isNaN(numId) && Number(p.id) === numId));
     
     const updatePayload = { ...req.body };
+    if (req.body.price !== undefined) updatePayload.price = Number(req.body.price);
+    if (req.body.original_price !== undefined) updatePayload.original_price = Number(req.body.original_price);
     if (req.body.stock !== undefined) {
         updatePayload.stock = Number(req.body.stock);
         updatePayload.stock_qty = Number(req.body.stock);
@@ -3361,11 +3371,16 @@ app.put('/api/admin/products/:id', requireAdminAuth, async (req, res) => {
 
     if (isMongoConnected) {
         try {
+            const queryConditions = [{ id: rawId }];
+            if (!isNaN(numId)) queryConditions.push({ id: numId });
+            if (mongoose.Types.ObjectId.isValid(rawId)) queryConditions.push({ _id: rawId });
+
             await ProductModel.updateOne(
-                { $or: [{ id: !isNaN(numId) ? numId : rawId }, { id: rawId }, { _id: rawId }] },
-                { $set: updatePayload }
+                { $or: queryConditions },
+                { $set: updatePayload },
+                { upsert: true }
             );
-            console.log(`[MONGODB UPDATE SUCCESS] Product '${updatePayload.name || rawId}' updated in Cloud Database.`);
+            console.log(`[MONGODB UPDATE SUCCESS] Product '${updatePayload.name || rawId}' updated in Cloud Database with price ₹${updatePayload.price}.`);
         } catch (mErr) {
             console.error('[MONGODB UPDATE PRODUCT ERROR]', mErr.message);
         }
