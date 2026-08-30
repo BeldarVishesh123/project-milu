@@ -25,9 +25,37 @@ export default function AdminDashboard({ onNavigateHome }) {
   const [loginError, setLoginError] = useState('');
   const [showForgotModal, setShowForgotModal] = useState(false);
 
+  // Admin Navigation URL & History State Manager
+  const getInitialAdminTab = () => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tabParam = urlParams.get('tab');
+      if (tabParam) return tabParam;
+
+      const hash = window.location.hash.replace('#', '');
+      if (hash) return hash;
+
+      const savedTab = localStorage.getItem('krishiv_admin_active_tab');
+      if (savedTab) return savedTab;
+    } catch (e) {}
+    return 'dashboard';
+  };
+
   // Admin Theme & Navigation State
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('admin_theme') === 'dark');
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(getInitialAdminTab);
+
+  const changeTab = (newTab, options = {}) => {
+    setActiveTab(newTab);
+    try {
+      localStorage.setItem('krishiv_admin_active_tab', newTab);
+      const newUrl = `/admin?tab=${newTab}`;
+      if (window.location.search !== `?tab=${newTab}`) {
+        window.history.pushState({ tab: newTab, ...options }, '', newUrl);
+      }
+    } catch (e) {}
+  };
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
@@ -150,6 +178,52 @@ export default function AdminDashboard({ onNavigateHome }) {
       fetchAdminData();
     }
   }, [adminUser]);
+
+  // Storefront-like Browser Navigation (Reload, Backward, Forward) for Admin Suite
+  useEffect(() => {
+    const handlePopState = (e) => {
+      if (e.state && e.state.tab) {
+        setActiveTab(e.state.tab);
+        localStorage.setItem('krishiv_admin_active_tab', e.state.tab);
+      } else {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tabParam = urlParams.get('tab') || localStorage.getItem('krishiv_admin_active_tab') || 'dashboard';
+        setActiveTab(tabParam);
+        localStorage.setItem('krishiv_admin_active_tab', tabParam);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Sync URL search parameter & Page Title per Active Tab
+  useEffect(() => {
+    const tabTitles = {
+      dashboard: 'Admin Dashboard | Krishiv Corporation',
+      products: 'Products Management | Krishiv Admin',
+      categories: 'Categories Management | Krishiv Admin',
+      orders: 'Orders Management | Krishiv Admin',
+      customers: 'Customer Directory | Krishiv Admin',
+      inventory: 'Inventory & Stock Control | Krishiv Admin',
+      broadcast: 'Broadcast Mailer | Krishiv Admin',
+      coupons: 'Coupons & Discounts | Krishiv Admin',
+      reviews: 'Product Reviews | Krishiv Admin',
+      notifications: 'System Notifications | Krishiv Admin',
+      analytics: 'Sales Analytics | Krishiv Admin',
+      settings: 'Store Settings | Krishiv Admin',
+      logs: 'Activity Logs | Krishiv Admin'
+    };
+
+    document.title = tabTitles[activeTab] || 'Krishiv Admin Suite';
+
+    try {
+      const currentUrlTab = new URLSearchParams(window.location.search).get('tab');
+      if (currentUrlTab !== activeTab) {
+        window.history.replaceState({ tab: activeTab }, '', `/admin?tab=${activeTab}`);
+      }
+    } catch (e) {}
+  }, [activeTab]);
 
   const authHeaders = useMemo(() => ({
     'Content-Type': 'application/json',
@@ -978,7 +1052,7 @@ export default function AdminDashboard({ onNavigateHome }) {
       }}>
         {/* Brand Header */}
         <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${themeBorder}` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => setActiveTab('dashboard')}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => changeTab('dashboard')}>
             <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg, #8f8269, #bfa882)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: '800', fontSize: '15px' }}>
               Kc
             </div>
@@ -1016,7 +1090,7 @@ export default function AdminDashboard({ onNavigateHome }) {
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => changeTab(item.id)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '14px',
                   padding: sidebarOpen ? '11px 16px' : '11px 0',
@@ -1116,7 +1190,7 @@ export default function AdminDashboard({ onNavigateHome }) {
                 return (
                   <button
                     key={item.id}
-                    onClick={() => { setActiveTab(item.id); setMobileMenuOpen(false); }}
+                    onClick={() => { changeTab(item.id); setMobileMenuOpen(false); }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '14px',
                       padding: '12px 16px', borderRadius: '12px', border: 'none',
@@ -1230,7 +1304,7 @@ export default function AdminDashboard({ onNavigateHome }) {
                       {searchResults.products.slice(0, 4).map(p => (
                         <div 
                           key={p.id} 
-                          onClick={() => { setActiveTab('products'); setGlobalSearch(''); }}
+                          onClick={() => { changeTab('products'); setGlobalSearch(''); }}
                           style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px', borderRadius: '8px', cursor: 'pointer', background: darkMode ? 'rgba(255,255,255,0.03)' : '#f8fafc', marginBottom: '4px' }}
                         >
                           <img src={p.image_url || '/images/orange_peel.png'} alt={p.name} style={{ width: '28px', height: '28px', borderRadius: '6px', objectFit: 'cover' }} />
@@ -1252,7 +1326,7 @@ export default function AdminDashboard({ onNavigateHome }) {
                       {searchResults.orders.slice(0, 4).map(o => (
                         <div 
                           key={o.id} 
-                          onClick={() => { setActiveTab('orders'); setSelectedOrder(o); setShowOrderModal(true); setGlobalSearch(''); }}
+                          onClick={() => { changeTab('orders'); setSelectedOrder(o); setShowOrderModal(true); setGlobalSearch(''); }}
                           style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px', borderRadius: '8px', cursor: 'pointer', background: darkMode ? 'rgba(255,255,255,0.03)' : '#f8fafc', marginBottom: '4px' }}
                         >
                           <div>
@@ -1274,7 +1348,7 @@ export default function AdminDashboard({ onNavigateHome }) {
                       {searchResults.customers.slice(0, 4).map((c, i) => (
                         <div 
                           key={i} 
-                          onClick={() => { setActiveTab('customers'); setGlobalSearch(''); }}
+                          onClick={() => { changeTab('customers'); setGlobalSearch(''); }}
                           style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px', borderRadius: '8px', cursor: 'pointer', background: darkMode ? 'rgba(255,255,255,0.03)' : '#f8fafc', marginBottom: '4px' }}
                         >
                           <Users size={16} style={{ color: '#8f8269' }} />
@@ -1399,7 +1473,7 @@ export default function AdminDashboard({ onNavigateHome }) {
                 <div style={{ background: themeCardBg, padding: '24px', borderRadius: '20px', border: `1px solid ${themeBorder}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>Recent Orders</h3>
-                    <button onClick={() => setActiveTab('orders')} style={{ background: 'none', border: 'none', color: '#8f8269', fontSize: '12px', fontWeight: '700', cursor: 'pointer', minHeight: '36px' }}>View All →</button>
+                    <button onClick={() => changeTab('orders')} style={{ background: 'none', border: 'none', color: '#8f8269', fontSize: '12px', fontWeight: '700', cursor: 'pointer', minHeight: '36px' }}>View All →</button>
                   </div>
                   <div className="table-responsive">
                     <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse', fontSize: '13px' }}>
