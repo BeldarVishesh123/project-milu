@@ -1862,57 +1862,74 @@ export default function AdminDashboard({ onNavigateHome }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {orders.map(o => (
-                      <tr key={o.id} style={{ borderBottom: `1px solid ${themeBorder}` }}>
-                        <td style={{ padding: '14px 20px', fontWeight: '700' }}>#{o.id}</td>
-                        <td style={{ padding: '14px 20px', color: themeTextSoft }}>{new Date(o.created_at || Date.now()).toLocaleDateString()}</td>
-                        <td style={{ padding: '14px 20px' }}>{(o.payment_method || 'COD').toUpperCase()}</td>
-                        <td style={{ padding: '14px 20px', fontWeight: '700' }}>₹{o.total}</td>
-                        <td style={{ padding: '14px 20px' }}>
-                          <select 
-                            value={o.status} 
-                            onChange={e => handleUpdateOrderStatus(o.id, e.target.value, o.trackingId || o.tracking_id || '')}
-                            style={{ padding: '6px 12px', borderRadius: '10px', border: `1px solid ${themeBorder}`, background: themeCardBg, color: themeText, fontSize: '12px', fontWeight: '700', minHeight: '38px' }}
-                          >
-                            <option value="placed">Placed</option>
-                            <option value="confirmed">Confirmed</option>
-                            <option value="preparing">Preparing</option>
-                            <option value="packed">Packed</option>
-                            <option value="shipped">Shipped</option>
-                            <option value="on_estimate">On Estimate (In Transit)</option>
-                            <option value="delivered">Delivered</option>
-                          </select>
-                        </td>
-                        <td style={{ padding: '14px 20px' }}>
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                            <input 
-                              type="text" 
-                              placeholder="e.g. CP123456789IN"
-                              defaultValue={o.trackingId || o.tracking_id || ''}
-                              onBlur={(e) => {
-                                const val = e.target.value.trim();
-                                if (val && val !== (o.trackingId || o.tracking_id)) {
-                                  handleUpdateOrderStatus(o.id, 'on_estimate', val);
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  const val = e.target.value.trim();
-                                  if (val) handleUpdateOrderStatus(o.id, 'on_estimate', val);
-                                }
-                              }}
-                              style={{ padding: '6px 10px', borderRadius: '8px', border: `1px solid ${themeBorder}`, background: themeBg, color: themeText, fontSize: '11px', width: '130px', minHeight: '36px' }}
-                            />
-                            {(o.trackingId || o.tracking_id) && (
-                              <span style={{ fontSize: '10px', color: '#10b981', fontWeight: '700' }}>✓ Saved</span>
-                            )}
-                          </div>
-                        </td>
-                        <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                          <button onClick={() => { setSelectedOrder(o); setShowOrderModal(true); }} style={{ padding: '8px 14px', borderRadius: '8px', background: '#8f8269', color: '#fff', border: 'none', fontSize: '11px', fontWeight: '700', cursor: 'pointer', minHeight: '36px' }}>View Details</button>
+                    {(!Array.isArray(orders) || orders.length === 0) ? (
+                      <tr>
+                        <td colSpan="7" style={{ textAlign: 'center', padding: '32px', color: themeTextSoft }}>
+                          No orders recorded in the pipeline yet.
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      (Array.isArray(orders) ? orders : []).map((o, idx) => {
+                        const ordId = o.id || o._id || o.orderId || `ord-${idx}`;
+                        const ordDate = o.created_at || o.createdAt || Date.now();
+                        const ordPayMethod = (o.payment_method || o.paymentMethod || o.items?.payment?.method || 'COD').toUpperCase();
+                        const ordTotal = o.total || o.grandTotal || o.totalAmount || 0;
+                        const ordStatus = o.status || 'placed';
+
+                        return (
+                          <tr key={ordId} style={{ borderBottom: `1px solid ${themeBorder}` }}>
+                            <td style={{ padding: '14px 20px', fontWeight: '700', fontFamily: 'monospace' }}>#{ordId}</td>
+                            <td style={{ padding: '14px 20px', color: themeTextSoft }}>{new Date(ordDate).toLocaleDateString()}</td>
+                            <td style={{ padding: '14px 20px' }}>{ordPayMethod}</td>
+                            <td style={{ padding: '14px 20px', fontWeight: '700' }}>₹{ordTotal}</td>
+                            <td style={{ padding: '14px 20px' }}>
+                              <select 
+                                value={ordStatus} 
+                                onChange={e => handleUpdateOrderStatus(ordId, e.target.value, o.trackingId || o.tracking_id || '')}
+                                style={{ padding: '6px 12px', borderRadius: '10px', border: `1px solid ${themeBorder}`, background: themeCardBg, color: themeText, fontSize: '12px', fontWeight: '700', minHeight: '38px' }}
+                              >
+                                <option value="placed">Placed</option>
+                                <option value="confirmed">Confirmed</option>
+                                <option value="preparing">Preparing</option>
+                                <option value="packed">Packed</option>
+                                <option value="shipped">Shipped</option>
+                                <option value="on_estimate">On Estimate (In Transit)</option>
+                                <option value="delivered">Delivered</option>
+                                <option value="cancelled">Cancelled</option>
+                              </select>
+                            </td>
+                            <td style={{ padding: '14px 20px' }}>
+                              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                <input 
+                                  type="text" 
+                                  placeholder="e.g. CP123456789IN"
+                                  defaultValue={o.trackingId || o.tracking_id || ''}
+                                  onBlur={(e) => {
+                                    const val = e.target.value.trim();
+                                    if (val && val !== (o.trackingId || o.tracking_id)) {
+                                      handleUpdateOrderStatus(ordId, 'on_estimate', val);
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const val = e.target.value.trim();
+                                      if (val) handleUpdateOrderStatus(ordId, 'on_estimate', val);
+                                    }
+                                  }}
+                                  style={{ padding: '6px 10px', borderRadius: '8px', border: `1px solid ${themeBorder}`, background: themeBg, color: themeText, fontSize: '11px', width: '130px', minHeight: '36px' }}
+                                />
+                                {(o.trackingId || o.tracking_id) && (
+                                  <span style={{ fontSize: '10px', color: '#10b981', fontWeight: '700' }}>✓ Saved</span>
+                                )}
+                              </div>
+                            </td>
+                            <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                              <button onClick={() => { setSelectedOrder(o); setShowOrderModal(true); }} style={{ padding: '8px 14px', borderRadius: '8px', background: '#8f8269', color: '#fff', border: 'none', fontSize: '11px', fontWeight: '700', cursor: 'pointer', minHeight: '36px' }}>View Details</button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -2693,11 +2710,63 @@ export default function AdminDashboard({ onNavigateHome }) {
                 )}
               </div>
 
-              <div style={{ marginTop: '12px', padding: '12px', background: themeBg, borderRadius: '12px', border: `1px solid ${themeBorder}` }}>
-                <strong style={{ display: 'block', marginBottom: '4px' }}>Shipping Address:</strong>
-                <div>{selectedOrder.shipping_address?.name || 'Valued Customer'}</div>
-                <div>{selectedOrder.shipping_address?.address || 'Standard Address'}, {selectedOrder.shipping_address?.city || ''}</div>
-                <div>Phone: {selectedOrder.shipping_address?.phone || 'N/A'}</div>
+              {/* Shipping Address Box */}
+              {(() => {
+                const sObj = selectedOrder.items?.shipping || selectedOrder.shipping || selectedOrder.shipping_address || {};
+                const name = sObj.name || sObj.fullName || selectedOrder.customer_name || 'Valued Customer';
+                const addr = sObj.address || sObj.streetAddress || selectedOrder.address || 'Standard Delivery Address';
+                const city = sObj.city || selectedOrder.city || '';
+                const state = sObj.state || sObj.shippingState || selectedOrder.state || '';
+                const zip = sObj.zip || sObj.pincode || selectedOrder.zip || '';
+                const phone = sObj.phone || selectedOrder.phone || 'N/A';
+                const email = sObj.email || selectedOrder.customer_email || selectedOrder.email || 'N/A';
+
+                return (
+                  <div style={{ marginTop: '12px', padding: '12px', background: themeBg, borderRadius: '12px', border: `1px solid ${themeBorder}` }}>
+                    <strong style={{ display: 'block', marginBottom: '4px' }}>Customer & Delivery Details:</strong>
+                    <div style={{ fontWeight: '700' }}>{name}</div>
+                    <div>{addr}{city ? `, ${city}` : ''}{state ? `, ${state}` : ''}{zip ? ` - ${zip}` : ''}</div>
+                    <div>Phone: {phone}</div>
+                    <div>Email: {email}</div>
+                  </div>
+                );
+              })()}
+
+              {/* Items Breakdown Box */}
+              <div style={{ marginTop: '12px', background: themeBg, borderRadius: '12px', padding: '12px', border: `1px solid ${themeBorder}` }}>
+                <strong style={{ display: 'block', marginBottom: '8px', fontSize: '11px', color: themeTextSoft, textTransform: 'uppercase' }}>Purchased Items Breakdown:</strong>
+                {(() => {
+                  const itemsList = Array.isArray(selectedOrder.items) 
+                    ? selectedOrder.items 
+                    : (selectedOrder.items?.cartItems || selectedOrder.cartItems || []);
+                  
+                  if (itemsList.length === 0) return <div style={{ fontSize: '12px', color: themeTextSoft }}>No product items detailed.</div>;
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {itemsList.map((item, idx) => {
+                        const pId = Number(item.productId || item.id);
+                        const p = products.find(prod => prod.id === pId) || item;
+                        return (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', borderBottom: idx < itemsList.length - 1 ? `1px solid ${themeBorder}` : 'none', paddingBottom: '6px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <img 
+                                src={p.image_url || '/images/orange_peel.png'} 
+                                alt={p.name || 'Product'} 
+                                style={{ width: '36px', height: '36px', objectFit: 'contain', background: '#fff', borderRadius: '6px', border: `1px solid ${themeBorder}`, padding: '2px' }} 
+                              />
+                              <div>
+                                <strong style={{ color: themeText, display: 'block' }}>{p.name || `Product #${pId}`}</strong>
+                                <span style={{ fontSize: '11px', color: themeTextSoft }}>Qty: {item.quantity || 1} × ₹{p.price || 0}</span>
+                              </div>
+                            </div>
+                            <strong style={{ color: themeText }}>₹{(p.price || 0) * (item.quantity || 1)}</strong>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>

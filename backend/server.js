@@ -3624,18 +3624,36 @@ app.post('/api/admin/logout', requireAdminAuth, (req, res) => {
 });
 
 // Admin Stats (Protected with requireAdminAuth)
-app.get('/api/admin/stats', requireAdminAuth, (req, res) => {
-    const validOrders = mockOrders.filter(o => o.status !== 'cancelled');
-    const totalRevenue = validOrders.reduce((sum, o) => sum + Number(o.total || o.totalAmount || 0), 0);
+app.get('/api/admin/stats', requireAdminAuth, async (req, res) => {
+    await ensureDbConnected();
+    let combinedOrders = [...mockOrders];
+    if (isMongoConnected) {
+        try {
+            const dbOrders = await OrderModel.find().lean();
+            if (dbOrders && dbOrders.length > 0) {
+                const map = new Map();
+                for (const o of [...mockOrders, ...dbOrders]) {
+                    const key = String(o.id || o._id || o.orderId);
+                    map.set(key, o);
+                }
+                combinedOrders = Array.from(map.values());
+            }
+        } catch (e) {
+            console.error('[STATS DB FETCH ERROR]', e.message);
+        }
+    }
+
+    const validOrders = combinedOrders.filter(o => o.status !== 'cancelled');
+    const totalRevenue = validOrders.reduce((sum, o) => sum + Number(o.total || o.grandTotal || o.totalAmount || 0), 0);
     
     const todayStr = new Date().toISOString().slice(0, 10);
-    const todayOrders = validOrders.filter(o => (o.date || o.created_at || '').startsWith(todayStr));
-    const todayRevenue = todayOrders.reduce((sum, o) => sum + Number(o.total || o.totalAmount || 0), 0);
+    const todayOrders = validOrders.filter(o => (o.date || o.created_at || o.createdAt || '').slice(0, 10) === todayStr);
+    const todayRevenue = todayOrders.reduce((sum, o) => sum + Number(o.total || o.grandTotal || o.totalAmount || 0), 0);
 
-    const totalOrders = mockOrders.length;
-    const pendingOrders = mockOrders.filter(o => o.status === 'pending' || o.status === 'placed' || o.status === 'processing').length;
-    const cancelledOrders = mockOrders.filter(o => o.status === 'cancelled').length;
-    const completedOrders = mockOrders.filter(o => o.status === 'delivered' || o.status === 'completed').length;
+    const totalOrders = combinedOrders.length;
+    const pendingOrders = combinedOrders.filter(o => o.status === 'pending' || o.status === 'placed' || o.status === 'processing' || o.status === 'confirmed').length;
+    const cancelledOrders = combinedOrders.filter(o => o.status === 'cancelled').length;
+    const completedOrders = combinedOrders.filter(o => o.status === 'delivered' || o.status === 'completed').length;
     const totalCustomers = mockUsers.length;
     const totalProducts = mockProducts.length;
     const outOfStockProducts = mockProducts.filter(p => (p.stock !== undefined ? p.stock : (p.stock_qty || 0)) <= 0).length;
@@ -3659,6 +3677,40 @@ app.get('/api/admin/stats', requireAdminAuth, (req, res) => {
             lowStockProducts
         }
     });
+});
+
+// Admin Orders (Protected with requireAdminAuth)
+app.get('/api/admin/orders', requireAdminAuth, async (req, res) => {
+    await ensureDbConnected();
+    let ordersList = [...mockOrders];
+    if (isMongoConnected) {
+        try {
+            const dbOrders = await OrderModel.find().sort({ created_at: -1 }).lean();
+            if (dbOrders && dbOrders.length > 0) {
+                const map = new Map();
+                for (const o of [...mockOrders, ...dbOrders]) {
+                    const key = String(o.id || o._id || o.orderId);
+                    map.set(key, o);
+                }
+                ordersList = Array.from(map.values());
+            }
+        } catch (mErr) {
+            console.error('[MONGODB ADMIN GET ORDERS ERROR]', mErr.message);
+        }
+    }
+
+    const normalizedOrders = ordersList.map(o => ({
+        ...o,
+        id: String(o.id || o._id || o.orderId || `ord-${Math.random().toString(36).substr(2, 6)}`),
+        total: Number(o.total || o.grandTotal || o.totalAmount || 0),
+        created_at: o.created_at || o.createdAt || new Date().toISOString(),
+        payment_method: o.payment_method || o.paymentMethod || o.items?.payment?.method || 'COD',
+        status: o.status || 'placed',
+        tracking_id: o.tracking_id || o.trackingId || '',
+        trackingId: o.trackingId || o.tracking_id || ''
+    }));
+
+    return res.json({ success: true, orders: normalizedOrders });
 });
 
 // Admin Product CRUD (Protected with requireAdminAuth & MongoDB Sync)
