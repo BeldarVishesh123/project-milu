@@ -1850,8 +1850,8 @@ export default function App() {
                 style={{ position: 'relative' }}
                 aria-label="View Wishlist"
               >
-                <Heart style={{ width: '20px', height: '20px', fill: wishlist.length > 0 ? 'var(--clay)' : 'none', color: wishlist.length > 0 ? 'var(--clay)' : 'var(--ink)' }} />
-                {wishlist.length > 0 && (
+                <Heart style={{ width: '20px', height: '20px', fill: (Array.isArray(wishlist) && wishlist.length > 0) ? 'var(--clay)' : 'none', color: (Array.isArray(wishlist) && wishlist.length > 0) ? 'var(--clay)' : 'var(--ink)' }} />
+                {Array.isArray(wishlist) && wishlist.length > 0 && (
                   <span className="badge" style={{ background: 'var(--clay)' }}>{wishlist.length}</span>
                 )}
               </button>
@@ -1864,7 +1864,7 @@ export default function App() {
                   aria-label="Notifications"
                 >
                   <Bell style={{ width: '20px', height: '20px', color: 'var(--ink)' }} />
-                  {notifications.some(n => !n.read) && (
+                  {Array.isArray(notifications) && notifications.some(n => n && !n.read) && (
                     <span style={{ position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', background: 'var(--gold)', borderRadius: '50%', border: '1.5px solid var(--cream)', boxShadow: '0 0 6px var(--gold)' }}></span>
                   )}
                 </button>
@@ -1876,7 +1876,7 @@ export default function App() {
                         <Bell size={16} style={{ color: 'var(--gold)' }} /> Notification Center
                       </div>
                       <button 
-                        onClick={() => setNotifications(notifications.map(n => ({ ...n, read: true })))}
+                        onClick={() => setNotifications((Array.isArray(notifications) ? notifications : []).map(n => ({ ...n, read: true })))}
                         style={{ background: 'none', border: 'none', fontSize: '11px', color: 'var(--gold)', fontWeight: '700', cursor: 'pointer', padding: 0 }}
                       >
                         Mark all read
@@ -1884,21 +1884,21 @@ export default function App() {
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '280px', overflowY: 'auto' }}>
-                      {notifications.length === 0 ? (
+                      {(!Array.isArray(notifications) || notifications.length === 0) ? (
                         <div style={{ fontSize: '12px', color: 'var(--ink-soft)', textAlign: 'center', padding: '16px 0' }}>No new notifications</div>
                       ) : (
-                        notifications.map(n => (
+                        notifications.map(n => n && (
                           <div 
-                            key={n.id} 
-                            onClick={() => setNotifications(notifications.map(item => item.id === n.id ? { ...item, read: true } : item))}
+                            key={n.id || Math.random()} 
+                            onClick={() => setNotifications((Array.isArray(notifications) ? notifications : []).map(item => item.id === n.id ? { ...item, read: true } : item))}
                             style={{ padding: '10px 12px', borderRadius: '12px', background: n.read ? 'rgba(255,255,255,0.4)' : '#ffffff', border: n.read ? '1px solid transparent' : '1px solid var(--gold-light)', cursor: 'pointer', transition: 'all 0.2s' }}
                           >
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
-                              <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--ink)' }}>{n.title}</span>
+                              <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--ink)' }}>{n.title || 'Notification'}</span>
                               {!n.read && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--gold)', display: 'inline-block' }}></span>}
                             </div>
-                            <p style={{ fontSize: '11.5px', color: 'var(--ink-soft)', margin: '0 0 4px', lineHeight: '1.4' }}>{n.message}</p>
-                            <span style={{ fontSize: '10px', color: 'var(--ink-soft)', opacity: 0.7 }}>{n.time}</span>
+                            <p style={{ fontSize: '11.5px', color: 'var(--ink-soft)', margin: '0 0 4px', lineHeight: '1.4' }}>{n.message || ''}</p>
+                            <span style={{ fontSize: '10px', color: 'var(--ink-soft)', opacity: 0.7 }}>{n.time || ''}</span>
                           </div>
                         ))
                       )}
@@ -1913,9 +1913,9 @@ export default function App() {
                 aria-label="View Cart"
               >
                 <ShoppingBag style={{ width: '20px', height: '20px' }} />
-                {cart.length > 0 && (
+                {Array.isArray(cart) && cart.length > 0 && (
                   <span className="badge">
-                    {cart.reduce((s, i) => s + i.quantity, 0)}
+                    {cart.reduce((s, i) => s + ((i && i.quantity) || 1), 0)}
                   </span>
                 )}
               </button>
@@ -1933,10 +1933,10 @@ export default function App() {
                     />
                   ) : (
                     <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--cream-deep)', color: 'var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '700', border: '1.5px solid var(--gold)' }}>
-                      {(user.name || user.email).substring(0, 2).toUpperCase()}
+                      {(user.name || user.email || 'US').substring(0, 2).toUpperCase()}
                     </div>
                   )}
-                  <span className="profile-name-nav" style={{ fontSize: '13px', fontWeight: '600', color: 'var(--ink)' }}>{user.name || user.email.split('@')[0]}</span>
+                  <span className="profile-name-nav" style={{ fontSize: '13px', fontWeight: '600', color: 'var(--ink)' }}>{user.name || (user.email ? user.email.split('@')[0] : 'Account')}</span>
                 </button>
 
                 {profileDropdownOpen && (
@@ -1976,7 +1976,7 @@ export default function App() {
                       }}
                       style={{ background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '12px', color: 'var(--ink)', padding: '4px 0', width: '100%', display: 'block', fontWeight: '500' }}
                     >
-                      Wishlist ({wishlist.length})
+                      Wishlist ({(Array.isArray(wishlist) ? wishlist : []).length})
                     </button>
 
                     <button 
