@@ -775,6 +775,33 @@ export default function AdminDashboard({ onNavigateHome }) {
     }
   };
 
+  // Create Real Admin Store Notification
+  const handleCreateNotification = async (e) => {
+    e.preventDefault();
+    if (!notifForm.title || !notifForm.message) {
+      alert('Please enter a notification title and message');
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/notifications`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify(notifForm)
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Notification published to Customer Storefront successfully!');
+        setShowNotificationModal(false);
+        setNotifForm({ title: '', message: '', type: 'Offer' });
+        fetchAdminData();
+      } else {
+        alert(data.error || 'Failed to publish notification');
+      }
+    } catch (err) {
+      console.error('Failed to create notification:', err);
+    }
+  };
+
   // If not logged in, render Admin Login Page
   if (!adminUser) {
     return (
@@ -2535,7 +2562,7 @@ export default function AdminDashboard({ onNavigateHome }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99990, padding: '16px' }}>
           <div className="admin-modal-container" style={{ background: themeCardBg, border: `1px solid ${themeBorder}`, borderRadius: '24px', padding: '32px', maxWidth: '440px', width: '100%' }}>
             <h3 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: '800' }}>Broadcast Customer Notification</h3>
-            <form onSubmit={(e) => { e.preventDefault(); alert(`Notification Broadcast Sent: "${notifForm.title}"`); setShowNotificationModal(false); }}>
+            <form onSubmit={handleCreateNotification}>
               <input type="text" placeholder="Title" value={notifForm.title} onChange={e => setNotifForm({ ...notifForm, title: e.target.value })} required style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${themeBorder}`, background: themeBg, color: themeText, marginBottom: '12px', boxSizing: 'border-box', minHeight: '44px' }} />
               <textarea placeholder="Message body" value={notifForm.message} onChange={e => setNotifForm({ ...notifForm, message: e.target.value })} required style={{ width: '100%', padding: '10px', borderRadius: '10px', border: `1px solid ${themeBorder}`, background: themeBg, color: themeText, marginBottom: '16px', boxSizing: 'border-box' }} />
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>

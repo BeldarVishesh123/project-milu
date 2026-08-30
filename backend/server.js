@@ -106,11 +106,20 @@ const PendingResetOtpSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now, expires: 900 }
 });
 
+const NotificationSchema = new mongoose.Schema({
+    id: { type: String, required: true, unique: true },
+    title: { type: String, required: true },
+    message: { type: String, required: true },
+    type: { type: String, default: 'Announcement' },
+    created_at: { type: Date, default: Date.now }
+}, { strict: false });
+
 const ProductModel = mongoose.model('Product', ProductSchema);
 const UserModel = mongoose.model('User', UserSchema);
 const OrderModel = mongoose.model('Order', OrderSchema);
 const PendingOtpModel = mongoose.model('PendingOtp', PendingOtpSchema);
 const PendingResetOtpModel = mongoose.model('PendingResetOtp', PendingResetOtpSchema);
+const NotificationModel = mongoose.model('Notification', NotificationSchema);
 
 let mongoPromise = null;
 const ensureDbConnected = async () => {
@@ -1124,6 +1133,22 @@ let mockCart = {};
 let mockUsers = [];
 let mockOrders = [];
 let mockFeedback = [];
+let mockNotifications = [];
+
+// Public Notifications Endpoint (Returns real admin notifications, empty if none added)
+app.get('/api/notifications', async (req, res) => {
+    await ensureDbConnected();
+    let list = [...mockNotifications];
+    if (isMongoConnected) {
+        try {
+            const dbNotifs = await NotificationModel.find().sort({ created_at: -1 }).lean();
+            if (dbNotifs && dbNotifs.length > 0) {
+                list = dbNotifs;
+            }
+        } catch (e) {}
+    }
+    return res.json({ success: true, notifications: list });
+});
 
 // API ENDPOINTS
 
@@ -3671,6 +3696,51 @@ app.get('/api/admin/settings', requireAdminAuth, (req, res) => {
 app.put('/api/admin/settings', requireAdminAuth, (req, res) => {
     mockStoreSettings = { ...mockStoreSettings, ...req.body };
     return res.json({ success: true, settings: mockStoreSettings });
+});
+
+// Admin Notifications (Protected with requireAdminAuth & MongoDB Sync)
+app.get('/api/admin/notifications', requireAdminAuth, async (req, res) => {
+    await ensureDbConnected();
+    let list = [...mockNotifications];
+    if (isMongoConnected) {
+        try {
+            const dbNotifs = await NotificationModel.find().sort({ created_at: -1 }).lean();
+            if (dbNotifs && dbNotifs.length > 0) {
+                list = dbNotifs;
+            }
+        } catch (e) {}
+    }
+    return res.json({ success: true, notifications: list });
+});
+
+app.post('/api/admin/notifications', requireAdminAuth, async (req, res) => {
+    await ensureDbConnected();
+    const newNotif = {
+        id: `notif-${Date.now()}`,
+        title: req.body.title || 'Announcement',
+        message: req.body.message || '',
+        type: req.body.type || 'Offer',
+        created_at: new Date().toISOString()
+    };
+    mockNotifications.unshift(newNotif);
+    if (isMongoConnected) {
+        try {
+            await NotificationModel.create(newNotif);
+        } catch (e) {}
+    }
+    return res.json({ success: true, notification: newNotif });
+});
+
+app.delete('/api/admin/notifications/:id', requireAdminAuth, async (req, res) => {
+    await ensureDbConnected();
+    const id = req.params.id;
+    mockNotifications = mockNotifications.filter(n => String(n.id) !== String(id));
+    if (isMongoConnected) {
+        try {
+            await NotificationModel.deleteOne({ id: id });
+        } catch (e) {}
+    }
+    return res.json({ success: true });
 });
 
 // Helper for Generating Premium Ad Banner HTML Email

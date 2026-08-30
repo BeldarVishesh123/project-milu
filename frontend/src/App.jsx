@@ -66,29 +66,7 @@ export default function App() {
   const [page, setPage] = useState(getInitialPage); // 'home', 'category', 'customercare', 'cart', 'login', 'terms'
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      title: '✨ Welcome to Krishiv Corporation',
-      message: 'Enjoy 100% pure organic skincare & botanical formulations.',
-      time: '2 hours ago',
-      read: false
-    },
-    {
-      id: 2,
-      title: '📮 India Post Dispatch Active',
-      message: 'Orders now feature real-time consignment tracking via India Post.',
-      time: '1 day ago',
-      read: false
-    },
-    {
-      id: 3,
-      title: '🌿 Organic Chocolate Wax Restocked',
-      message: 'Painless hair removal wax powder is now available!',
-      time: '2 days ago',
-      read: true
-    }
-  ]);
+  const [notifications, setNotifications] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [cart, setCart] = useState([]);
   const [user, setUser] = useState(null);
@@ -234,6 +212,15 @@ export default function App() {
         if (d && d.settings) setStoreSettings(d.settings);
       })
       .catch(e => console.error('Settings fetch error:', e));
+
+    fetch(`${API_BASE_URL}/notifications`)
+      .then(r => r.json())
+      .then(d => {
+        if (d && d.success && Array.isArray(d.notifications)) {
+          setNotifications(d.notifications);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const calculateClientShipping = (subtotal, state = shippingState, payMethod = paymentMethod, settings = storeSettings, itemsList = cart) => {
