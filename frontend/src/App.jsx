@@ -52,12 +52,14 @@ export default function App() {
 
   const turnstileSiteKey = import.meta.env.VITE_CLOUDFLARE_TURNSTILE_SITE_KEY || '2x00000000000000000000AB';
   const [turnstileToken, setTurnstileToken] = useState('TEST_MODE');
+  const turnstileWidgetId = useRef(null);
+  const isGoogleInitialized = useRef(false);
 
   const resetTurnstile = () => {
     setTurnstileToken('TEST_MODE');
-    if (typeof window !== 'undefined' && window.turnstile) {
+    if (typeof window !== 'undefined' && window.turnstile && turnstileWidgetId.current !== null) {
       try {
-        window.turnstile.reset('#cf-turnstile-container');
+        window.turnstile.reset(turnstileWidgetId.current);
       } catch (e) {
         console.warn('Turnstile reset note:', e.message);
       }
@@ -214,12 +216,12 @@ export default function App() {
   });
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/admin/settings`)
+    fetch(`${API_BASE_URL}/store-settings`)
       .then(r => r.json())
       .then(d => {
         if (d && d.settings) setStoreSettings(d.settings);
       })
-      .catch(e => console.error('Settings fetch error:', e));
+      .catch(e => console.warn('Store settings note:', e.message));
 
     fetch(`${API_BASE_URL}/notifications`)
       .then(r => r.json())
@@ -525,8 +527,14 @@ export default function App() {
         const container = document.getElementById('cf-turnstile-container');
         if (container && window.turnstile) {
           try {
+            if (turnstileWidgetId.current !== null) {
+              try {
+                window.turnstile.remove(turnstileWidgetId.current);
+              } catch (rErr) {}
+              turnstileWidgetId.current = null;
+            }
             container.innerHTML = '';
-            window.turnstile.render('#cf-turnstile-container', {
+            const wId = window.turnstile.render('#cf-turnstile-container', {
               sitekey: turnstileSiteKey,
               theme: 'light',
               appearance: 'always',
@@ -534,12 +542,21 @@ export default function App() {
               'expired-callback': () => resetTurnstile(),
               'error-callback': () => resetTurnstile()
             });
+            turnstileWidgetId.current = wId;
           } catch (e) {
             console.warn('Turnstile widget render note:', e.message);
           }
         }
       }, 200);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        if (turnstileWidgetId.current !== null && window.turnstile) {
+          try {
+            window.turnstile.remove(turnstileWidgetId.current);
+          } catch (e) {}
+          turnstileWidgetId.current = null;
+        }
+      };
     }
   }, [page, authMode, turnstileSiteKey]);
 
@@ -666,22 +683,34 @@ export default function App() {
     }
   }, [userOrders, activeOrder]);
 
-  // Initialize Google Sign In
+  // Initialize Google Sign In (Guarded Singleton Initialization)
   useEffect(() => {
-    if (window.google && isGoogleClientConfigured) {
-      window.google.accounts.id.initialize({
-        client_id: googleClientId,
-        callback: handleGoogleCallback,
-        auto_select: false
-      });
+    if (window.google && isGoogleClientConfigured && !isGoogleInitialized.current) {
+      try {
+        window.google.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: handleGoogleCallback,
+          auto_select: false
+        });
+        isGoogleInitialized.current = true;
+      } catch (e) {
+        console.warn('Google Identity initialization note:', e.message);
+      }
+    }
+  }, [isGoogleClientConfigured]);
 
-      if (page === 'login') {
-        const btnDiv = document.getElementById("google-signin-button-div");
-        if (btnDiv) {
+  useEffect(() => {
+    if (page === 'login' && window.google && isGoogleClientConfigured) {
+      const btnDiv = document.getElementById("google-signin-button-div");
+      if (btnDiv) {
+        try {
+          btnDiv.innerHTML = '';
           window.google.accounts.id.renderButton(
             btnDiv,
             { theme: "outline", size: "large", width: "350", text: "continue_with" }
           );
+        } catch (bErr) {
+          console.warn('Google sign-in button render note:', bErr.message);
         }
       }
     }
