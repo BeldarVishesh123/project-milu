@@ -3048,8 +3048,62 @@ const adminLoginLimiter = rateLimit({
     legacyHeaders: false
 });
 
-// Cryptographically Secure Active Sessions Map (Token -> Session Metadata)
+// Cryptographically Secure Active Sessions Map & Stateless HMAC Token Provider
 const activeAdminSessions = new Map();
+const ADMIN_SECRET = process.env.ADMIN_JWT_SECRET || process.env.SESSION_SECRET || 'krishiv-admin-super-secure-jwt-key-2026';
+
+function signAdminToken(adminData, ttlMs = 12 * 60 * 60 * 1000) {
+    const expiresAt = Date.now() + ttlMs;
+    const payload = JSON.stringify({
+        id: adminData.id,
+        name: adminData.name,
+        email: adminData.email,
+        role: adminData.role,
+        avatar: adminData.avatar,
+        expiresAt
+    });
+    const base64Payload = Buffer.from(payload).toString('base64url');
+    const signature = crypto.createHmac('sha256', ADMIN_SECRET).update(base64Payload).digest('hex');
+    return `admin-sec-${base64Payload}.${signature}`;
+}
+
+function verifyAdminToken(token) {
+    if (!token || typeof token !== 'string' || !token.startsWith('admin-sec-')) return null;
+
+    // Check in-memory session map first
+    const inMem = activeAdminSessions.get(token);
+    if (inMem && Date.now() <= inMem.expiresAt) {
+        return inMem.admin;
+    }
+
+    const raw = token.replace('admin-sec-', '');
+    const parts = raw.split('.');
+    if (parts.length !== 2) return null;
+
+    const [base64Payload, signature] = parts;
+    const expectedSig = crypto.createHmac('sha256', ADMIN_SECRET).update(base64Payload).digest('hex');
+
+    if (signature !== expectedSig) {
+        return null;
+    }
+
+    try {
+        const payloadStr = Buffer.from(base64Payload, 'base64url').toString('utf8');
+        const payload = JSON.parse(payloadStr);
+        if (Date.now() > payload.expiresAt) {
+            return null;
+        }
+        return {
+            id: payload.id,
+            name: payload.name,
+            email: payload.email,
+            role: payload.role,
+            avatar: payload.avatar
+        };
+    } catch (e) {
+        return null;
+    }
+}
 
 // Cryptographically Secure Admin Authentication Middleware
 function requireAdminAuth(req, res, next) {
@@ -3060,20 +3114,12 @@ function requireAdminAuth(req, res, next) {
         return res.status(401).json({ error: 'Unauthorized: Administrative authentication token required' });
     }
 
-    const session = activeAdminSessions.get(token);
-    if (!session) {
+    const adminPayload = verifyAdminToken(token);
+    if (!adminPayload) {
         return res.status(401).json({ error: 'Unauthorized: Invalid or expired administrative session token' });
     }
 
-    // 12-Hour Session Expiration Check
-    if (Date.now() > session.expiresAt) {
-        activeAdminSessions.delete(token);
-        return res.status(401).json({ error: 'Unauthorized: Admin session expired. Please log in again.' });
-    }
-
-    // Extend active session TTL on activity
-    session.expiresAt = Date.now() + (12 * 60 * 60 * 1000);
-    req.admin = session.admin;
+    req.admin = adminPayload;
     next();
 }
 
@@ -3138,10 +3184,6 @@ app.post('/api/admin/login', adminLoginLimiter, async (req, res) => {
         return res.status(401).json({ error: 'Invalid administrative credentials.' });
     }
 
-    // Generate 256-bit cryptographically secure session token using crypto.randomBytes
-    const token = `admin-sec-${crypto.randomBytes(32).toString('hex')}`;
-    const expiresAt = Date.now() + (12 * 60 * 60 * 1000); // 12 Hours TTL
-
     const adminSessionData = {
         id: admin.id,
         name: admin.name,
@@ -3149,6 +3191,9 @@ app.post('/api/admin/login', adminLoginLimiter, async (req, res) => {
         role: admin.role,
         avatar: admin.avatar
     };
+
+    const token = signAdminToken(adminSessionData);
+    const expiresAt = Date.now() + (12 * 60 * 60 * 1000); // 12 Hours TTL
 
     activeAdminSessions.set(token, {
         admin: adminSessionData,
