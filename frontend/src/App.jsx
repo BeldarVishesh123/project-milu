@@ -634,14 +634,13 @@ export default function App() {
   }, []);
 
   const fetchUserOrders = useCallback(async () => {
-    if (!user) return;
     setIsOrdersLoading(true);
     setOrdersFetchError(null);
     try {
-      const uId = user.id || 'guest';
-      const qEmail = encodeURIComponent(user.email || '');
-      const qPhone = encodeURIComponent(user.phone || '');
-      const qName = encodeURIComponent(user.name || '');
+      const uId = user?.id || 'guest';
+      const qEmail = encodeURIComponent(user?.email || '');
+      const qPhone = encodeURIComponent(user?.phone || '');
+      const qName = encodeURIComponent(user?.name || '');
       const res = await fetch(`${API_BASE_URL}/orders/${uId}?email=${qEmail}&phone=${qPhone}&name=${qName}`);
       if (res.ok) {
         const data = await res.json();
@@ -3429,7 +3428,7 @@ export default function App() {
                 {page === 'orders' && (
                   <div>
                     <h3 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--ink)', marginBottom: '16px' }}>Order History</h3>
-                    {isOrdersLoading ? (
+                    {isOrdersLoading && userOrders.length === 0 ? (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: '12px' }}>
                         <Loader2 className="animate-spin" size={28} style={{ color: 'var(--gold)' }} />
                         <p style={{ fontSize: '13px', color: 'var(--ink-soft)', fontWeight: '600' }}>Loading your orders...</p>
