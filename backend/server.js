@@ -3163,7 +3163,175 @@ function requireSuperAdminAuth(req, res, next) {
     });
 }
 
-// Admin Secure Login Endpoint
+// Pending Admin 2FA Verification Sessions (tempToken -> { adminData, otp, expiresAt })
+const pendingAdmin2FA = new Map();
+
+async function sendAdmin2StepAuthEmail(adminEmail, otpCode, clientInfo = {}) {
+    const targetEmail = 'krishivcorporation4513@gmail.com';
+    const { transporter } = await getEmailTransporter();
+    
+    const nowStr = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' (IST)';
+    const ipAddr = clientInfo.ip || '127.0.0.1';
+    const userAgent = clientInfo.userAgent || 'Web Browser';
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #121216; margin: 0; padding: 20px; color: #f3f4f6; }
+        .card { max-width: 540px; margin: 0 auto; background: #1e1e24; border-radius: 20px; border: 1px solid rgba(191,168,130,0.3); overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.6); }
+        .header { background: linear-gradient(135deg, #1b261b 0%, #2e3e2e 100%); padding: 32px 24px; text-align: center; border-bottom: 1px solid #8f8269; }
+        .badge { background: #d4af37; color: #121216; font-size: 11px; font-weight: 800; padding: 5px 14px; border-radius: 20px; text-transform: uppercase; letter-spacing: 1px; display: inline-block; margin-bottom: 12px; }
+        .title { font-size: 22px; font-weight: 800; color: #ffffff; margin: 0; }
+        .body { padding: 30px 24px; text-align: center; }
+        .otp-box { background: #0f172a; border: 2px dashed #bfa882; border-radius: 16px; padding: 20px; margin: 24px 0; text-align: center; }
+        .otp-code { font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #bfa882; font-family: monospace; }
+        .meta-table { width: 100%; margin-top: 24px; border-collapse: collapse; text-align: left; font-size: 13px; color: #94a3b8; }
+        .meta-table td { padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .meta-table td strong { color: #f3f4f6; }
+        .footer { background: #0b0c10; padding: 18px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid rgba(255,255,255,0.05); }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <div class="badge">🔒 2-STEP AUTHENTICATION ALERT</div>
+          <h1 class="title">Admin Login Verification Code</h1>
+        </div>
+        <div class="body">
+          <p style="font-size: 14px; color: #cbd5e1; margin-bottom: 20px;">
+            A login attempt was initiated for the <strong>Krishiv Corporation Admin Suite</strong> for account <code>${adminEmail}</code>.
+          </p>
+          <div class="otp-box">
+            <div style="font-size: 11px; font-weight: 700; color: #8f8269; text-transform: uppercase; margin-bottom: 6px;">Your 6-Digit 2FA Verification OTP</div>
+            <div class="otp-code">${otpCode}</div>
+            <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">Valid for 10 minutes. Do not disclose this code to anyone.</div>
+          </div>
+          <table class="meta-table">
+            <tr>
+              <td><strong>Account:</strong></td>
+              <td>${adminEmail}</td>
+            </tr>
+            <tr>
+              <td><strong>Timestamp:</strong></td>
+              <td>${nowStr}</td>
+            </tr>
+            <tr>
+              <td><strong>IP Address:</strong></td>
+              <td>${ipAddr}</td>
+            </tr>
+            <tr>
+              <td><strong>Device / Browser:</strong></td>
+              <td>${userAgent}</td>
+            </tr>
+          </table>
+        </div>
+        <div class="footer">
+          <strong>KRISHIV CORPORATION ADMIN SECURITY ENGINE</strong><br>
+          Sent directly to krishivcorporation4513@gmail.com for administrative verification.
+        </div>
+      </div>
+    </body>
+    </html>
+    `;
+
+    try {
+        await transporter.sendMail({
+            from: '"Krishiv Security Suite" <krishivcorporation4513@gmail.com>',
+            to: targetEmail,
+            subject: `🔒 Security OTP (${otpCode}) — Krishiv Admin 2-Step Verification`,
+            html: htmlContent
+        });
+        console.log(`[2FA OTP SUCCESS] Sent 2FA OTP ${otpCode} to ${targetEmail}`);
+    } catch (err) {
+        console.error('[2FA OTP MAIL ERROR]', err.message);
+    }
+}
+
+async function sendAdminLoginSuccessEmail(adminEmail, clientInfo = {}) {
+    const targetEmail = 'krishivcorporation4513@gmail.com';
+    const { transporter } = await getEmailTransporter();
+    
+    const nowStr = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' (IST)';
+    const ipAddr = clientInfo.ip || '127.0.0.1';
+    const userAgent = clientInfo.userAgent || 'Web Browser';
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #121216; margin: 0; padding: 20px; color: #f3f4f6; }
+        .card { max-width: 540px; margin: 0 auto; background: #1e1e24; border-radius: 20px; border: 1px solid rgba(34,197,94,0.3); overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.6); }
+        .header { background: linear-gradient(135deg, #14532d 0%, #166534 100%); padding: 32px 24px; text-align: center; border-bottom: 1px solid #22c55e; }
+        .badge { background: #22c55e; color: #121216; font-size: 11px; font-weight: 800; padding: 5px 14px; border-radius: 20px; text-transform: uppercase; letter-spacing: 1px; display: inline-block; margin-bottom: 12px; }
+        .title { font-size: 22px; font-weight: 800; color: #ffffff; margin: 0; }
+        .body { padding: 30px 24px; }
+        .meta-table { width: 100%; margin-top: 16px; border-collapse: collapse; text-align: left; font-size: 13px; color: #94a3b8; }
+        .meta-table td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .meta-table td strong { color: #f3f4f6; }
+        .footer { background: #0b0c10; padding: 18px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid rgba(255,255,255,0.05); }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <div class="badge">✅ LOGIN SUCCESSFUL</div>
+          <h1 class="title">Admin Session Established</h1>
+        </div>
+        <div class="body">
+          <p style="font-size: 14px; color: #cbd5e1; margin-bottom: 16px;">
+            An administrative session has been successfully established for <strong>${adminEmail}</strong> after passing 2-Step Verification.
+          </p>
+          <table class="meta-table">
+            <tr>
+              <td><strong>Logged Account:</strong></td>
+              <td>${adminEmail}</td>
+            </tr>
+            <tr>
+              <td><strong>Timestamp:</strong></td>
+              <td>${nowStr}</td>
+            </tr>
+            <tr>
+              <td><strong>IP Address:</strong></td>
+              <td>${ipAddr}</td>
+            </tr>
+            <tr>
+              <td><strong>Device / Browser:</strong></td>
+              <td>${userAgent}</td>
+            </tr>
+            <tr>
+              <td><strong>Security Status:</strong></td>
+              <td><span style="color: #4ade80; font-weight: 700;">2FA Verified & Active</span></td>
+            </tr>
+          </table>
+        </div>
+        <div class="footer">
+          <strong>KRISHIV CORPORATION ADMIN SECURITY ENGINE</strong><br>
+          Sent automatically to krishivcorporation4513@gmail.com for security auditing.
+        </div>
+      </div>
+    </body>
+    </html>
+    `;
+
+    try {
+        await transporter.sendMail({
+            from: '"Krishiv Security Suite" <krishivcorporation4513@gmail.com>',
+            to: targetEmail,
+            subject: `✅ Security Notice: Admin Suite Login Successful (${adminEmail})`,
+            html: htmlContent
+        });
+        console.log(`[LOGIN ALERT SUCCESS] Admin login notification sent to ${targetEmail}`);
+    } catch (err) {
+        console.error('[LOGIN ALERT ERROR]', err.message);
+    }
+}
+
+// Admin Secure Login Endpoint - Step 1: Credentials Check & 2FA OTP Generation
 app.post('/api/admin/login', adminLoginLimiter, async (req, res) => {
     await ensureDbConnected();
     const { email, password } = req.body || {};
@@ -3183,7 +3351,7 @@ app.post('/api/admin/login', adminLoginLimiter, async (req, res) => {
         admin = {
             id: 'admin-1',
             name: 'Krishiv Admin',
-            email: cleanEmail,
+            email: cleanEmail.includes('@') ? cleanEmail : 'krishivcorporation4513@gmail.com',
             password: superAdminPassword,
             role: 'Super Admin',
             avatar: '/images/admin_avatar.png'
@@ -3221,27 +3389,121 @@ app.post('/api/admin/login', adminLoginLimiter, async (req, res) => {
         avatar: admin.avatar
     };
 
+    // Generate 6-digit 2FA OTP code
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const temp2faToken = `2fa-${crypto.randomBytes(16).toString('hex')}`;
+
+    pendingAdmin2FA.set(temp2faToken, {
+        admin: adminSessionData,
+        otp: otpCode,
+        expiresAt: Date.now() + (10 * 60 * 1000)
+    });
+
+    const clientInfo = {
+        ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip,
+        userAgent: req.headers['user-agent'] || 'Web Browser'
+    };
+
+    // Send 2FA OTP Email to krishivcorporation4513@gmail.com
+    sendAdmin2StepAuthEmail(admin.email, otpCode, clientInfo).catch(e => console.error(e));
+
+    // Also send mobile SMS OTP if configured
+    sendMobileSMSOTP('+919825100000', `Your Krishiv Admin 2-Step Verification Code is ${otpCode}. Valid for 10 min.`).catch(e => console.error(e));
+
+    console.log(`[2FA OTP GENERATED] Code ${otpCode} for Admin ${admin.email} (Temp Token: ${temp2faToken})`);
+
+    return res.json({
+        success: true,
+        require2FA: true,
+        tempToken: temp2faToken,
+        email: 'krishivcorporation4513@gmail.com',
+        message: '2-Step Verification OTP code sent to krishivcorporation4513@gmail.com'
+    });
+});
+
+// Admin Secure Login Endpoint - Step 2: Verify 2FA OTP Code
+app.post('/api/admin/login/verify-2fa', async (req, res) => {
+    const { tempToken, otp } = req.body || {};
+
+    if (!tempToken || !otp) {
+        return res.status(400).json({ error: 'Temporary 2FA session token and 6-digit OTP code are required.' });
+    }
+
+    const sessionData = pendingAdmin2FA.get(tempToken);
+    if (!sessionData) {
+        return res.status(401).json({ error: 'Invalid or expired 2-Step Verification session. Please log in again.' });
+    }
+
+    if (Date.now() > sessionData.expiresAt) {
+        pendingAdmin2FA.delete(tempToken);
+        return res.status(401).json({ error: '2-Step Verification OTP code has expired. Please click Resend OTP.' });
+    }
+
+    if (String(sessionData.otp).trim() !== String(otp).trim()) {
+        return res.status(400).json({ error: 'Incorrect 2-Step Verification OTP code. Please check your email.' });
+    }
+
+    pendingAdmin2FA.delete(tempToken);
+
+    const adminSessionData = sessionData.admin;
     const token = signAdminToken(adminSessionData);
-    const expiresAt = Date.now() + (12 * 60 * 60 * 1000); // 12 Hours TTL
+    const expiresAt = Date.now() + (12 * 60 * 60 * 1000);
 
     activeAdminSessions.set(token, {
         admin: adminSessionData,
         expiresAt: expiresAt
     });
 
+    const clientInfo = {
+        ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip,
+        userAgent: req.headers['user-agent'] || 'Web Browser'
+    };
+
+    sendAdminLoginSuccessEmail(adminSessionData.email, clientInfo).catch(e => console.error(e));
+
     const log = {
         id: `l-${Date.now()}`,
         timestamp: new Date().toISOString(),
-        user: admin.email,
-        action: 'Admin Login',
-        details: `Secure Admin Session Established (${admin.role})`
+        user: adminSessionData.email,
+        action: 'Admin 2FA Login Verified',
+        details: `2-Step Verification passed. Admin Session Established (${adminSessionData.role})`
     };
     mockLogs.unshift(log);
 
     return res.json({
         success: true,
         token: token,
-        admin: adminSessionData
+        admin: adminSessionData,
+        message: '2-Step Verification successful! Welcome to Admin Suite.'
+    });
+});
+
+// Admin 2FA Resend Endpoint
+app.post('/api/admin/login/resend-2fa', async (req, res) => {
+    const { tempToken } = req.body || {};
+    if (!tempToken) {
+        return res.status(400).json({ error: 'Temporary 2FA session token required.' });
+    }
+
+    const sessionData = pendingAdmin2FA.get(tempToken);
+    if (!sessionData) {
+        return res.status(401).json({ error: 'Session expired. Please enter email and password again.' });
+    }
+
+    const newOtpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    sessionData.otp = newOtpCode;
+    sessionData.expiresAt = Date.now() + (10 * 60 * 1000);
+
+    const clientInfo = {
+        ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip,
+        userAgent: req.headers['user-agent'] || 'Web Browser'
+    };
+
+    sendAdmin2StepAuthEmail(sessionData.admin.email, newOtpCode, clientInfo).catch(e => console.error(e));
+
+    return res.json({
+        success: true,
+        message: 'A new 2-Step Verification OTP code has been sent to krishivcorporation4513@gmail.com!'
     });
 });
 

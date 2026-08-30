@@ -32,6 +32,14 @@ export default function AdminDashboard({ onNavigateHome }) {
   const [loginError, setLoginError] = useState('');
   const [showForgotModal, setShowForgotModal] = useState(false);
 
+  // 2-Step Authentication (2FA) State
+  const [step2FA, setStep2FA] = useState(false);
+  const [temp2faToken, setTemp2faToken] = useState('');
+  const [target2faEmail, setTarget2faEmail] = useState('');
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [resendMsg, setResendMsg] = useState('');
+
   // Admin Navigation URL & History State Manager
   const getInitialAdminTab = () => {
     try {
@@ -340,10 +348,11 @@ export default function AdminDashboard({ onNavigateHome }) {
     }
   };
 
-  // Handle Admin Login
+  // Handle Admin Login Step 1 (Password Verification & Trigger 2FA)
   const handleAdminLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
+    setResendMsg('');
     try {
       const res = await fetch(`${API_BASE_URL}/admin/login`, {
         method: 'POST',
@@ -352,15 +361,81 @@ export default function AdminDashboard({ onNavigateHome }) {
       });
       const data = await res.json();
       if (data.success) {
-        setAdminUser(data.admin);
-        setAdminToken(data.token);
-        localStorage.setItem('krishiv_admin_token', data.token);
-        localStorage.setItem('krishiv_admin_user', JSON.stringify(data.admin));
+        if (data.require2FA) {
+          setStep2FA(true);
+          setTemp2faToken(data.tempToken);
+          setTarget2faEmail(data.email || 'krishivcorporation4513@gmail.com');
+          setOtpDigits(['', '', '', '', '', '']);
+        } else {
+          setAdminUser(data.admin);
+          setAdminToken(data.token);
+          localStorage.setItem('krishiv_admin_token', data.token);
+          localStorage.setItem('krishiv_admin_user', JSON.stringify(data.admin));
+        }
       } else {
         setLoginError(data.error || 'Invalid credentials');
       }
     } catch (err) {
       setLoginError('Server connection failed');
+    }
+  };
+
+  // Handle Admin Login Step 2 (Verify 6-Digit 2FA OTP)
+  const handleVerify2FA = async (e) => {
+    if (e) e.preventDefault();
+    const otpCode = otpDigits.join('');
+    if (otpCode.length !== 6) {
+      setLoginError('Please enter all 6 digits of your 2-Step Verification code');
+      return;
+    }
+
+    setOtpLoading(true);
+    setLoginError('');
+    setResendMsg('');
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/login/verify-2fa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tempToken: temp2faToken, otp: otpCode })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAdminUser(data.admin);
+        setAdminToken(data.token);
+        localStorage.setItem('krishiv_admin_token', data.token);
+        localStorage.setItem('krishiv_admin_user', JSON.stringify(data.admin));
+        setStep2FA(false);
+        setTemp2faToken('');
+      } else {
+        setLoginError(data.error || 'Invalid 2-Step Verification code');
+      }
+    } catch (err) {
+      setLoginError('2-Step Verification request failed');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleResend2FA = async () => {
+    setLoginError('');
+    setResendMsg('Sending new OTP code...');
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/login/resend-2fa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tempToken: temp2faToken })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setResendMsg('✅ New 2-Step Verification code sent to krishivcorporation4513@gmail.com!');
+      } else {
+        setLoginError(data.error || 'Failed to resend 2FA code');
+        setResendMsg('');
+      }
+    } catch (err) {
+      setLoginError('Resend OTP request failed');
+      setResendMsg('');
     }
   };
 
@@ -815,124 +890,241 @@ export default function AdminDashboard({ onNavigateHome }) {
         fontFamily: "'Inter', sans-serif",
         color: '#f3f4f6'
       }}>
-        <div className="admin-modal-container" style={{
-          maxWidth: '440px',
-          width: '100%',
-          background: 'rgba(30, 30, 40, 0.75)',
-          backdropFilter: 'blur(16px)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          borderRadius: '24px',
-          padding: '40px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
-        }}>
-          <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+        {step2FA ? (
+          <div className="admin-modal-container" style={{
+            maxWidth: '440px',
+            width: '100%',
+            background: 'rgba(30, 30, 40, 0.85)',
+            backdropFilter: 'blur(20px)',
+            border: '1.5px solid rgba(191, 168, 130, 0.4)',
+            borderRadius: '24px',
+            padding: '40px',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)',
+            textAlign: 'center'
+          }}>
             <div style={{
               width: '64px', height: '64px', borderRadius: '18px',
-              background: 'linear-gradient(135deg, #8f8269, #bfa882)',
+              background: 'linear-gradient(135deg, #10b981, #059669)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              margin: '0 auto 16px', fontSize: '24px', fontWeight: '800', color: '#fff',
-              boxShadow: '0 8px 20px rgba(143, 130, 105, 0.3)'
+              margin: '0 auto 16px', color: '#fff',
+              boxShadow: '0 8px 20px rgba(16, 185, 129, 0.3)'
             }}>
-              Kc
+              <ShieldAlert size={32} />
             </div>
-            <h2 style={{ fontSize: '24px', fontWeight: '700', margin: '0 0 6px', letterSpacing: '-0.5px' }}>Krishiv Admin Portal</h2>
-            <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0 }}>Sign in to manage Krishiv Corporation operations</p>
-          </div>
 
-          {loginError && (
-            <div style={{
-              background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)',
-              color: '#f87171', padding: '12px 16px', borderRadius: '12px', fontSize: '13px',
-              marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px'
-            }}>
-              <ShieldAlert size={16} /> {loginError}
-            </div>
-          )}
+            <h2 style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 6px', letterSpacing: '-0.5px', color: '#fff' }}>
+              2-Step Verification
+            </h2>
+            <p style={{ fontSize: '13px', color: '#9ca3af', margin: '0 0 20px', lineHeight: '1.5' }}>
+              A 6-digit security OTP code was sent to <strong style={{ color: '#bfa882' }}>krishivcorporation4513@gmail.com</strong>
+            </p>
 
-          <form onSubmit={handleAdminLogin}>
-            <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#d1d5db', marginBottom: '6px' }}>Admin Email</label>
-              <div style={{ position: 'relative' }}>
-                <Mail size={16} style={{ position: 'absolute', left: '14px', top: '14px', color: '#6b7280' }} />
-                <input 
-                  type="email" 
-                  value={loginEmail} 
-                  onChange={e => setLoginEmail(e.target.value)} 
-                  required
-                  placeholder="admin@krishiv.co"
-                  style={{
-                    width: '100%', padding: '12px 14px 12px 42px', borderRadius: '12px',
-                    background: 'rgba(15, 15, 20, 0.6)', border: '1px solid rgba(255, 255, 255, 0.12)',
-                    color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box', minHeight: '44px'
-                  }}
-                />
+            {loginError && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#f87171', padding: '10px 14px', borderRadius: '12px', fontSize: '12.5px',
+                marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center'
+              }}>
+                <ShieldAlert size={16} /> {loginError}
               </div>
-            </div>
+            )}
 
-            <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#d1d5db', marginBottom: '6px' }}>Password</label>
-              <div style={{ position: 'relative' }}>
-                <Lock size={16} style={{ position: 'absolute', left: '14px', top: '14px', color: '#6b7280' }} />
-                <input 
-                  type={showPassword ? 'text' : 'password'} 
-                  value={loginPassword} 
-                  onChange={e => setLoginPassword(e.target.value)} 
-                  required
-                  placeholder="••••••••"
-                  style={{
-                    width: '100%', padding: '12px 42px 12px 42px', borderRadius: '12px',
-                    background: 'rgba(15, 15, 20, 0.6)', border: '1px solid rgba(255, 255, 255, 0.12)',
-                    color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box', minHeight: '44px'
-                  }}
-                />
-                <button 
-                  type="button" 
-                  onClick={() => setShowPassword(!showPassword)}
-                  style={{ position: 'absolute', right: '14px', top: '12px', background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', minHeight: '36px' }}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+            {resendMsg && (
+              <div style={{
+                background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)',
+                color: '#34d399', padding: '10px 14px', borderRadius: '12px', fontSize: '12.5px',
+                marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center'
+              }}>
+                <CheckCircle size={16} /> {resendMsg}
               </div>
-            </div>
+            )}
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', fontSize: '12px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#9ca3af', cursor: 'pointer' }}>
-                <input 
-                  type="checkbox" 
-                  checked={rememberMe} 
-                  onChange={e => setRememberMe(e.target.checked)} 
-                  style={{ accentColor: '#8f8269' }}
-                /> Remember me
-              </label>
-              <button 
-                type="button" 
-                onClick={() => setShowForgotModal(true)} 
-                style={{ background: 'none', border: 'none', color: '#bfa882', cursor: 'pointer', fontWeight: '500', minHeight: '36px' }}
+            <form onSubmit={handleVerify2FA}>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '24px' }}>
+                {otpDigits.map((digit, idx) => (
+                  <input
+                    key={idx}
+                    id={`admin-otp-${idx}`}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={e => {
+                      const val = e.target.value.replace(/[^0-9]/g, '');
+                      const newOtp = [...otpDigits];
+                      newOtp[idx] = val;
+                      setOtpDigits(newOtp);
+                      if (val && idx < 5) {
+                        const nextEl = document.getElementById(`admin-otp-${idx + 1}`);
+                        if (nextEl) nextEl.focus();
+                      }
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Backspace' && !otpDigits[idx] && idx > 0) {
+                        const prevEl = document.getElementById(`admin-otp-${idx - 1}`);
+                        if (prevEl) prevEl.focus();
+                      }
+                    }}
+                    style={{
+                      width: '46px', height: '54px', textAlign: 'center', fontSize: '22px', fontWeight: '800',
+                      borderRadius: '12px', background: 'rgba(15, 15, 20, 0.8)', border: '1.5px solid rgba(191, 168, 130, 0.4)',
+                      color: '#bfa882', outline: 'none'
+                    }}
+                  />
+                ))}
+              </div>
+
+              <button
+                type="submit"
+                disabled={otpLoading}
+                style={{
+                  width: '100%', padding: '14px', borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #8f8269, #70624a)',
+                  color: '#fff', fontWeight: '800', fontSize: '14px', border: 'none',
+                  cursor: 'pointer', boxShadow: '0 8px 20px rgba(143, 130, 105, 0.3)', minHeight: '46px'
+                }}
               >
-                Forgot Password?
+                {otpLoading ? 'Verifying OTP...' : 'Verify & Enter Admin Suite →'}
+              </button>
+            </form>
+
+            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+              <button
+                type="button"
+                onClick={handleResend2FA}
+                style={{ background: 'none', border: 'none', color: '#bfa882', cursor: 'pointer', fontWeight: '700', textDecoration: 'underline' }}
+              >
+                Resend 2FA Code
+              </button>
+              <button
+                type="button"
+                onClick={() => { setStep2FA(false); setLoginError(''); }}
+                style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                ← Back to Login
               </button>
             </div>
-
-            <button 
-              type="submit" 
-              style={{
-                width: '100%', padding: '14px', borderRadius: '12px',
-                background: 'linear-gradient(135deg, #8f8269, #70624a)',
-                color: '#fff', fontWeight: '700', fontSize: '14px', border: 'none',
-                cursor: 'pointer', boxShadow: '0 8px 20px rgba(143, 130, 105, 0.3)',
-                transition: 'transform 0.2s', minHeight: '44px'
-              }}
-            >
-              Log In to Admin Dashboard
-            </button>
-          </form>
-
-          <div style={{ marginTop: '20px', textAlign: 'center' }}>
-            <button onClick={onNavigateHome} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline', minHeight: '36px' }}>
-              ← Return to Customer Store
-            </button>
           </div>
-        </div>
+        ) : (
+          <div className="admin-modal-container" style={{
+            maxWidth: '440px',
+            width: '100%',
+            background: 'rgba(30, 30, 40, 0.75)',
+            backdropFilter: 'blur(16px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '24px',
+            padding: '40px',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+              <div style={{
+                width: '64px', height: '64px', borderRadius: '18px',
+                background: 'linear-gradient(135deg, #8f8269, #bfa882)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 16px', fontSize: '24px', fontWeight: '800', color: '#fff',
+                boxShadow: '0 8px 20px rgba(143, 130, 105, 0.3)'
+              }}>
+                Kc
+              </div>
+              <h2 style={{ fontSize: '24px', fontWeight: '700', margin: '0 0 6px', letterSpacing: '-0.5px' }}>Krishiv Admin Portal</h2>
+              <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0 }}>Sign in to manage Krishiv Corporation operations</p>
+            </div>
+
+            {loginError && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#f87171', padding: '12px 16px', borderRadius: '12px', fontSize: '13px',
+                marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px'
+              }}>
+                <ShieldAlert size={16} /> {loginError}
+              </div>
+            )}
+
+            <form onSubmit={handleAdminLogin}>
+              <div style={{ marginBottom: '18px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#d1d5db', marginBottom: '6px' }}>Admin Email</label>
+                <div style={{ position: 'relative' }}>
+                  <Mail size={16} style={{ position: 'absolute', left: '14px', top: '14px', color: '#6b7280' }} />
+                  <input 
+                    type="email" 
+                    value={loginEmail} 
+                    onChange={e => setLoginEmail(e.target.value)} 
+                    required
+                    placeholder="admin@krishiv.co"
+                    style={{
+                      width: '100%', padding: '12px 14px 12px 42px', borderRadius: '12px',
+                      background: 'rgba(15, 15, 20, 0.6)', border: '1px solid rgba(255, 255, 255, 0.12)',
+                      color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box', minHeight: '44px'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '18px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#d1d5db', marginBottom: '6px' }}>Password</label>
+                <div style={{ position: 'relative' }}>
+                  <Lock size={16} style={{ position: 'absolute', left: '14px', top: '14px', color: '#6b7280' }} />
+                  <input 
+                    type={showPassword ? 'text' : 'password'} 
+                    value={loginPassword} 
+                    onChange={e => setLoginPassword(e.target.value)} 
+                    required
+                    placeholder="••••••••"
+                    style={{
+                      width: '100%', padding: '12px 42px 12px 42px', borderRadius: '12px',
+                      background: 'rgba(15, 15, 20, 0.6)', border: '1px solid rgba(255, 255, 255, 0.12)',
+                      color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box', minHeight: '44px'
+                    }}
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{ position: 'absolute', right: '14px', top: '12px', background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', minHeight: '36px' }}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', fontSize: '12px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#9ca3af', cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={rememberMe} 
+                    onChange={e => setRememberMe(e.target.checked)} 
+                    style={{ accentColor: '#8f8269' }}
+                  /> Remember me
+                </label>
+                <button 
+                  type="button" 
+                  onClick={() => setShowForgotModal(true)} 
+                  style={{ background: 'none', border: 'none', color: '#bfa882', cursor: 'pointer', fontWeight: '500', minHeight: '36px' }}
+                >
+                  Forgot Password?
+                </button>
+              </div>
+
+              <button 
+                type="submit" 
+                style={{
+                  width: '100%', padding: '14px', borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #8f8269, #70624a)',
+                  color: '#fff', fontWeight: '700', fontSize: '14px', border: 'none',
+                  cursor: 'pointer', boxShadow: '0 8px 20px rgba(143, 130, 105, 0.3)',
+                  transition: 'transform 0.2s', minHeight: '44px'
+                }}
+              >
+                Log In to Admin Dashboard
+              </button>
+            </form>
+
+            <div style={{ marginTop: '20px', textAlign: 'center' }}>
+              <button onClick={onNavigateHome} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline', minHeight: '36px' }}>
+                ← Return to Customer Store
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Forgot Password Modal */}
         {showForgotModal && (
