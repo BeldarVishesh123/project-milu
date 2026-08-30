@@ -45,9 +45,12 @@ class ErrorBoundary extends Component {
             <p style={{ fontSize: '13px', color: '#666', fontFamily: 'sans-serif', marginBottom: '24px', lineHeight: '1.5' }}>
               We encountered a minor display update issue. Your cart and session are completely safe.
             </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
               <button
                 onClick={() => {
+                  try {
+                    localStorage.removeItem('krishiv_current_page');
+                  } catch (e) {}
                   window.location.href = '/';
                 }}
                 style={{
@@ -63,6 +66,24 @@ class ErrorBoundary extends Component {
                 }}
               >
                 Return to Storefront Home
+              </button>
+              <button
+                onClick={() => {
+                  this.setState({ hasError: false, error: null });
+                }}
+                style={{
+                  padding: '12px 24px',
+                  borderRadius: '10px',
+                  background: 'transparent',
+                  color: '#8f8269',
+                  border: '1.5px solid #8f8269',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  fontFamily: 'sans-serif'
+                }}
+              >
+                Try Reloading View
               </button>
             </div>
           </div>
