@@ -389,7 +389,8 @@ export default function AdminDashboard({ onNavigateHome }) {
         } catch (oErr) {}
       }
       if (Array.isArray(rawOrds)) setOrders(rawOrds);
-      if (resCusts.success && Array.isArray(resCusts.customers)) setCustomers(resCusts.customers);
+      const rawCusts = Array.isArray(resCusts) ? resCusts : (resCusts?.customers || resCusts?.data || []);
+      if (Array.isArray(rawCusts)) setCustomers(rawCusts);
       if (resCoup.success && Array.isArray(resCoup.coupons)) setCoupons(resCoup.coupons);
       if (resRev.success && Array.isArray(resRev.reviews)) setReviews(resRev.reviews);
       if (resLogs.success && Array.isArray(resLogs.logs)) setLogs(resLogs.logs);
