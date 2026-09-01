@@ -783,6 +783,24 @@ const sendAdminOrderNotificationEmail = async (order) => {
     }
 };
 
+// Send Order Mobile SMS Alert to Admin Mobile Number
+const sendAdminSMSOrderAlert = async (order) => {
+    try {
+        const adminMobile = process.env.ADMIN_MOBILE_PHONE || '+919876543210';
+        const shippingInfo = order.items?.shipping || order.shipping || {};
+        const customerName = shippingInfo.fullName || shippingInfo.name || 'Valued Customer';
+        const total = order.total || order.grandTotal || 0;
+        const orderId = order.id || order._id || 'N/A';
+
+        const smsAlertText = `🛒 New Order Alert! Order #${orderId} for ₹${total} placed by ${customerName}. Check Krishiv Admin Suite.`;
+        console.log(`[ADMIN SMS ALERT] Sending SMS alert to ${adminMobile}: "${smsAlertText}"`);
+
+        await sendMobileSMSOTP({ phone: adminMobile, name: 'Admin', otpCode: smsAlertText, type: 'alert' }).catch(() => {});
+    } catch (e) {
+        console.error('[ADMIN SMS ALERT ERROR]', e.message);
+    }
+};
+
 // Send Order Confirmation Email to Customer
 const sendCustomerOrderConfirmationEmail = async (order) => {
     try {
@@ -2542,9 +2560,10 @@ app.post('/api/orders', async (req, res) => {
 
     console.log(`[ORDER SUCCESS] Placed order #${orderId} | Total: ₹${shippingCalc.grandTotal} | Items: ${verifiedItems.length}`);
 
-    // Send Real-Time Email Notifications to Admin & Customer
-    sendAdminOrderNotificationEmail(newOrder);
-    sendCustomerOrderConfirmationEmail(newOrder);
+        // Send Real-Time Email & SMS Notifications to Admin & Customer
+        sendAdminOrderNotificationEmail(newOrder);
+        sendAdminSMSOrderAlert(newOrder);
+        sendCustomerOrderConfirmationEmail(newOrder);
 
     return res.json({
         success: true,
@@ -2808,8 +2827,9 @@ app.post('/api/payment/verify-razorpay', async (req, res) => {
 
         console.log(`[RAZORPAY PAYMENT VERIFIED] Order #${orderId} paid & saved! Txn ID: ${razorpay_payment_id}`);
 
-        // Send Real-Time Email Notifications to Admin & Customer
+        // Send Real-Time Email & SMS Notifications to Admin & Customer
         sendAdminOrderNotificationEmail(newOrder);
+        sendAdminSMSOrderAlert(newOrder);
         sendCustomerOrderConfirmationEmail(newOrder);
 
         return res.json({
