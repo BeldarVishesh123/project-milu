@@ -491,9 +491,26 @@ export default function AdminDashboard({ onNavigateHome }) {
     }
   };
 
-  const handleAdminLogout = () => {
+  const handleAdminLogout = async () => {
+    try {
+      const token = adminToken || localStorage.getItem('krishiv_admin_token') || '';
+      if (token) {
+        await fetch(`${API_BASE_URL}/admin/logout`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(() => {});
+      }
+    } catch (e) {}
+
     setAdminUser(null);
     setAdminToken('');
+    setStep2FA(false);
+    setTemp2faToken('');
+    setOtpDigits(['', '', '', '', '', '']);
+    setLoginEmail('');
+    setLoginPassword('');
+    setLoginError('');
+    setResendMsg('');
     localStorage.removeItem('krishiv_admin_user');
     localStorage.removeItem('krishiv_admin_token');
     localStorage.removeItem('krishiv_admin_active_tab');
