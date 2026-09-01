@@ -645,20 +645,7 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         if (data.success && Array.isArray(data.orders)) {
-          let fetchedOrders = data.orders;
-          try {
-            const savedLastOrder = localStorage.getItem('krishiv_last_order');
-            if (savedLastOrder) {
-              const parsed = JSON.parse(savedLastOrder);
-              if (parsed && (parsed.id || parsed._id)) {
-                const matchId = String(parsed.id || parsed._id);
-                if (!fetchedOrders.some(o => String(o.id || o._id) === matchId)) {
-                  fetchedOrders = [parsed, ...fetchedOrders];
-                }
-              }
-            }
-          } catch (e) {}
-          setUserOrders(fetchedOrders);
+          setUserOrders(data.orders);
         } else {
           setOrdersFetchError(data.error || 'Unable to retrieve order history.');
         }

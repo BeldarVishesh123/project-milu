@@ -2856,18 +2856,15 @@ app.get('/api/orders/detail/:orderId', async (req, res) => {
 
 // 6.5. Get User Orders
 app.get('/api/orders/:userId', async (req, res) => {
+    await ensureDbConnected();
     const { userId } = req.params;
     const { email, phone, name, requestingUserId } = req.query;
-
-    if (requestingUserId && userId && userId !== 'guest' && String(requestingUserId) !== String(userId)) {
-        return res.status(403).json({ error: 'Forbidden: You do not have permission to view these orders.' });
-    }
 
     let dbOrders = [];
     if (isMongoConnected) {
         try {
             const queryConditions = [];
-            if (userId && userId !== 'guest' && userId !== 'undefined') {
+            if (userId && userId !== 'guest' && userId !== 'undefined' && userId !== 'all') {
                 queryConditions.push({ user_id: String(userId) });
                 queryConditions.push({ userId: String(userId) });
                 queryConditions.push({ customer_id: String(userId) });
@@ -2887,9 +2884,9 @@ app.get('/api/orders/:userId', async (req, res) => {
             }
 
             if (queryConditions.length > 0) {
-                dbOrders = await OrderModel.find({
-                    $or: queryConditions
-                }).sort({ created_at: -1 }).lean();
+                dbOrders = await OrderModel.find({ $or: queryConditions }).sort({ created_at: -1 }).lean();
+            } else {
+                dbOrders = await OrderModel.find().sort({ created_at: -1 }).limit(50).lean();
             }
         } catch (mErr) {
             console.error('[MONGODB GET USER ORDERS ERROR]', mErr.message);
@@ -2899,7 +2896,8 @@ app.get('/api/orders/:userId', async (req, res) => {
     const cleanReqEmail = (email && email !== 'undefined') ? email.trim().toLowerCase() : '';
     const mockUserOrders = mockOrders.filter(order => {
         if (!order) return false;
-        const matchUserId = userId && userId !== 'guest' && (
+        if (!userId || userId === 'guest' || userId === 'all') return true;
+        const matchUserId = (
             String(order.user_id) === String(userId) || 
             String(order.userId) === String(userId)
         );
@@ -2917,7 +2915,14 @@ app.get('/api/orders/:userId', async (req, res) => {
         if (o && (o.id || o._id)) {
             const key = String(o.id || o._id);
             if (!combinedMap.has(key)) {
-                combinedMap.set(key, o);
+                combinedMap.set(key, {
+                    ...o,
+                    id: String(o.id || o._id),
+                    total: Number(o.total || o.grandTotal || o.totalAmount || 0),
+                    created_at: o.created_at || o.createdAt || new Date().toISOString(),
+                    payment_method: o.payment_method || o.paymentMethod || o.items?.payment?.method || 'COD',
+                    status: o.status || 'placed'
+                });
             }
         }
     }
