@@ -336,7 +336,15 @@ export default function AdminDashboard({ onNavigateHome }) {
       }
 
       if (resCats.success && Array.isArray(resCats.categories)) setCategories(resCats.categories);
-      const rawOrds = Array.isArray(resOrds) ? resOrds : (resOrds?.orders || resOrds?.data || []);
+      let rawOrds = Array.isArray(resOrds) ? resOrds : (resOrds?.orders || resOrds?.data || []);
+      if (!Array.isArray(rawOrds) || rawOrds.length === 0) {
+        try {
+          const publicOrdsRes = await fetch(`${API_BASE_URL}/orders/guest`).then(r => r.json());
+          if (publicOrdsRes.success && Array.isArray(publicOrdsRes.orders)) {
+            rawOrds = publicOrdsRes.orders;
+          }
+        } catch (oErr) {}
+      }
       if (Array.isArray(rawOrds)) setOrders(rawOrds);
       if (resCusts.success && Array.isArray(resCusts.customers)) setCustomers(resCusts.customers);
       if (resCoup.success && Array.isArray(resCoup.coupons)) setCoupons(resCoup.coupons);
