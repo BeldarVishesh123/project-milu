@@ -296,6 +296,49 @@ export default function AdminDashboard({ onNavigateHome }) {
     }));
   }, [orders]);
 
+  const displayStats = useMemo(() => {
+    const safeOrders = Array.isArray(orders) ? orders : [];
+    const safeProducts = Array.isArray(products) ? products : [];
+    const safeCustomers = Array.isArray(customers) ? customers : [];
+
+    const validOrders = safeOrders.filter(o => o.status !== 'cancelled');
+    const totalRevenue = validOrders.reduce((sum, o) => sum + Number(o.total || o.grandTotal || o.totalAmount || 0), 0);
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayOrders = validOrders.filter(o => (o.date || o.created_at || o.createdAt || '').slice(0, 10) === todayStr);
+    const todayRevenue = todayOrders.reduce((sum, o) => sum + Number(o.total || o.grandTotal || o.totalAmount || 0), 0);
+
+    const totalOrders = safeOrders.length;
+    const pendingOrders = safeOrders.filter(o => ['pending', 'placed', 'processing', 'confirmed', 'packed'].includes((o.status || 'placed').toLowerCase())).length;
+    const cancelledOrders = safeOrders.filter(o => (o.status || '').toLowerCase() === 'cancelled').length;
+    const completedOrders = safeOrders.filter(o => ['delivered', 'completed'].includes((o.status || '').toLowerCase())).length;
+
+    const uniqueEmails = new Set(safeCustomers.map(c => c.email).concat(safeOrders.map(o => o.customer_email || o.email || o.items?.shipping?.email)).filter(Boolean));
+    const totalCustomers = Math.max(safeCustomers.length, uniqueEmails.size);
+    const totalProducts = safeProducts.length;
+
+    const outOfStockProducts = safeProducts.filter(p => (p.stock !== undefined ? p.stock : (p.stock_qty || 0)) <= 0).length;
+    const lowStockProducts = safeProducts.filter(p => {
+      const qty = (p.stock !== undefined ? p.stock : (p.stock_qty || 0));
+      return qty > 0 && qty <= 5;
+    }).length;
+
+    return {
+      totalRevenue: stats.totalRevenue || totalRevenue,
+      todayRevenue: stats.todayRevenue || todayRevenue,
+      totalOrders: Math.max(stats.totalOrders || 0, totalOrders),
+      pendingOrders: Math.max(stats.pendingOrders || 0, pendingOrders),
+      cancelledOrders: Math.max(stats.cancelledOrders || 0, cancelledOrders),
+      completedOrders: Math.max(stats.completedOrders || 0, completedOrders),
+      totalCustomers: Math.max(stats.totalCustomers || 0, totalCustomers),
+      totalProducts: Math.max(stats.totalProducts || 0, totalProducts),
+      outOfStockProducts: Math.max(stats.outOfStockProducts || 0, outOfStockProducts),
+      lowStockProducts: Math.max(stats.lowStockProducts || 0, lowStockProducts)
+    };
+  }, [stats, orders, customers, products]);
+
+
+
   const fetchAdminData = async () => {
     try {
       const token = adminToken || localStorage.getItem('krishiv_admin_token') || '';
@@ -1158,9 +1201,9 @@ export default function AdminDashboard({ onNavigateHome }) {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'products', label: 'Products', icon: ShoppingBag },
     { id: 'categories', label: 'Categories', icon: FolderKanban },
-    { id: 'orders', label: 'Orders', icon: ShoppingCart, badge: stats.pendingOrders },
+    { id: 'orders', label: 'Orders', icon: ShoppingCart, badge: displayStats.pendingOrders > 0 ? displayStats.pendingOrders : null },
     { id: 'customers', label: 'Customers', icon: Users },
-    { id: 'inventory', label: 'Inventory', icon: Warehouse, badge: stats.outOfStockProducts > 0 ? stats.outOfStockProducts : null },
+    { id: 'inventory', label: 'Inventory', icon: Warehouse, badge: displayStats.outOfStockProducts > 0 ? displayStats.outOfStockProducts : null },
     { id: 'broadcast', label: 'Broadcast Ad Mailer', icon: Megaphone },
     { id: 'coupons', label: 'Coupons', icon: Ticket },
     { id: 'reviews', label: 'Reviews', icon: Star },
@@ -1657,14 +1700,14 @@ export default function AdminDashboard({ onNavigateHome }) {
               {/* KPI Stats Cards Responsive Grid */}
               <div className="admin-stats-grid">
                 {[
-                  { label: "Total Revenue", val: `₹${stats.totalRevenue.toLocaleString()}`, tag: "Live DB Total", pos: true, color: "#10b981" },
-                  { label: "Today's Revenue", val: `₹${stats.todayRevenue.toLocaleString()}`, tag: "Today's Orders", pos: true, color: "#3b82f6" },
-                  { label: "Total Orders", val: stats.totalOrders, tag: "Recorded Checkout", pos: true, color: "#8b5cf6" },
-                  { label: "Pending Orders", val: stats.pendingOrders, tag: "Awaiting Dispatch", pos: false, color: "#f59e0b" },
-                  { label: "Cancelled Orders", val: stats.cancelledOrders, tag: "Cancelled Count", pos: false, color: "#ef4444" },
-                  { label: "Completed Orders", val: stats.completedOrders, tag: "Delivered Status", pos: true, color: "#06b6d4" },
-                  { label: "Total Customers", val: stats.totalCustomers, tag: "Registered Accounts", pos: true, color: "#ec4899" },
-                  { label: "Total Products", val: stats.totalProducts, tag: "Active Catalog", pos: true, color: "#6366f1" }
+                  { label: "Total Revenue", val: `₹${displayStats.totalRevenue.toLocaleString()}`, tag: "Live DB Total", pos: true, color: "#10b981" },
+                  { label: "Today's Revenue", val: `₹${displayStats.todayRevenue.toLocaleString()}`, tag: "Today's Orders", pos: true, color: "#3b82f6" },
+                  { label: "Total Orders", val: displayStats.totalOrders, tag: "Recorded Checkout", pos: true, color: "#8b5cf6" },
+                  { label: "Pending Orders", val: displayStats.pendingOrders, tag: "Awaiting Dispatch", pos: false, color: "#f59e0b" },
+                  { label: "Cancelled Orders", val: displayStats.cancelledOrders, tag: "Cancelled Count", pos: false, color: "#ef4444" },
+                  { label: "Completed Orders", val: displayStats.completedOrders, tag: "Delivered Status", pos: true, color: "#06b6d4" },
+                  { label: "Total Customers", val: displayStats.totalCustomers, tag: "Registered Accounts", pos: true, color: "#ec4899" },
+                  { label: "Total Products", val: displayStats.totalProducts, tag: "Active Catalog", pos: true, color: "#6366f1" }
                 ].map((c, i) => (
                   <div key={i} style={{ background: themeCardBg, padding: '20px', borderRadius: '16px', border: `1px solid ${themeBorder}`, boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
                     <div style={{ fontSize: '12px', color: themeTextSoft, fontWeight: '600', marginBottom: '8px' }}>{c.label}</div>
