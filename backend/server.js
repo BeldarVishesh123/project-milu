@@ -4063,26 +4063,78 @@ app.put('/api/admin/orders/:id/status', requireAdminAuth, async (req, res) => {
 
 // Admin Customers (MongoDB Atlas + In-Memory Sync - Protected with requireAdminAuth)
 app.get('/api/admin/customers', requireAdminAuth, async (req, res) => {
-    let customersList = [...mockUsers];
+    await ensureDbConnected();
+    const map = new Map();
+
+    for (const u of mockUsers) {
+        if (u && (u.email || u.id)) {
+            const key = String(u.email || u.id).toLowerCase();
+            map.set(key, { ...u, id: u.id || key, name: u.name || 'Valued Customer', email: u.email || key });
+        }
+    }
+
     if (isMongoConnected) {
         try {
             const dbUsers = await UserModel.find().lean();
             if (dbUsers && dbUsers.length > 0) {
-                const map = new Map();
-                for (const u of [...mockUsers, ...dbUsers]) {
-                    map.set(u.id || u.email, u);
+                for (const u of dbUsers) {
+                    if (u && (u.email || u.id)) {
+                        const key = String(u.email || u.id).toLowerCase();
+                        map.set(key, { ...u, id: u.id || String(u._id) || key, name: u.name || 'Valued Customer', email: u.email || key });
+                    }
                 }
-                customersList = Array.from(map.values());
             }
         } catch (mErr) {
             console.error('[MONGODB ADMIN GET CUSTOMERS ERROR]', mErr.message);
         }
     }
-    const sanitizedCustomers = customersList.map(u => {
+
+    let allOrders = [...mockOrders];
+    if (isMongoConnected) {
+        try {
+            const dbOrds = await OrderModel.find().lean();
+            if (dbOrds && dbOrds.length > 0) {
+                allOrders = [...mockOrders, ...dbOrds];
+            }
+        } catch (e) {}
+    }
+
+    for (const o of allOrders) {
+        if (!o) continue;
+        const sObj = o.items?.shipping || o.shipping || {};
+        const email = (o.customer_email || o.email || sObj.email || o.items?.shipping?.email || '').toLowerCase().trim();
+        const name = sObj.name || sObj.fullName || o.customer_name || 'Customer Buyer';
+        const phone = sObj.phone || o.phone || 'N/A';
+        const date = o.created_at || o.createdAt || new Date().toISOString();
+
+        if (email) {
+            if (!map.has(email)) {
+                map.set(email, {
+                    id: `cust-${email.replace(/[^a-z0-9]/gi, '')}`,
+                    name,
+                    email,
+                    phone,
+                    created_at: date,
+                    status: 'Active'
+                });
+            } else {
+                const existing = map.get(email);
+                if ((!existing.name || existing.name === 'Valued Customer' || existing.name === 'Registered User') && name) {
+                    existing.name = name;
+                }
+                if ((!existing.phone || existing.phone === 'N/A') && phone) {
+                    existing.phone = phone;
+                }
+            }
+        }
+    }
+
+    const customersList = Array.from(map.values()).map(u => {
         const { password, passwordHash, salt, otpHash, __v, ...safeUser } = u;
         return safeUser;
     });
-    return res.json({ success: true, customers: sanitizedCustomers });
+
+    return res.json({ success: true, customers: customersList });
 });
 
 app.put('/api/admin/customers/:id', requireAdminAuth, async (req, res) => {
