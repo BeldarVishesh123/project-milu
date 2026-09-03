@@ -774,10 +774,12 @@ export default function AdminDashboard({ onNavigateHome }) {
               <div style="font-size: 10px; color: #94a3b8;">
                 This is a computer-generated tax invoice issued by Krishiv Corporation.
               </div>
-              <div style="text-align: right;">
-                <div style="font-weight: 700; font-size: 11px; color: #0f172a;">For KRISHIV CORPORATION</div>
-                <div style="height: 40px;"></div>
-                <div style="border-top: 1px dashed #cbd5e1; padding-top: 4px; font-size: 10px; color: #64748b;">Authorized Signatory</div>
+              <div style="text-align: right; min-width: 160px;">
+                <div style="font-weight: 700; font-size: 11px; color: #0f172a; margin-bottom: 2px;">For KRISHIV CORPORATION</div>
+                <div style="height: 48px; display: flex; align-items: center; justify-content: flex-end;">
+                  <img src="/images/admin_signature.png" alt="Digital Signature" style="max-height: 44px; max-width: 150px; object-fit: contain; display: block;" />
+                </div>
+                <div style="border-top: 1px dashed #cbd5e1; padding-top: 4px; font-size: 10px; color: #64748b; font-weight: 600;">Authorized Signatory</div>
               </div>
             </div>
           </div>
