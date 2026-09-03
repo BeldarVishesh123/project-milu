@@ -6,6 +6,7 @@ import {
   Trash2, ShieldAlert, BookOpen, Layers, FileText, Heart, ShoppingCart, Star, Eye, EyeOff, Lock, Mail, Phone, Check, AlertCircle, KeyRound, CreditCard, Menu, Bell, Loader2
 } from 'lucide-react';
 import AdminDashboard from './admin/AdminDashboard';
+import { ADMIN_SIGNATURE_BASE64 } from './utils/signatureData';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
   (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -1881,13 +1882,17 @@ export default function App() {
               <div style="text-align: right; min-width: 160px;">
                 <div style="font-weight: 700; font-size: 11px; color: #0f172a; margin-bottom: 2px;">For KRISHIV CORPORATION</div>
                 <div style="height: 48px; display: flex; align-items: center; justify-content: flex-end;">
-                  <img src="/images/admin_signature.png" alt="Digital Signature" style="max-height: 44px; max-width: 150px; object-fit: contain; display: block;" />
+                  <img src="${ADMIN_SIGNATURE_BASE64}" alt="Digital Signature" style="max-height: 44px; max-width: 150px; object-fit: contain; display: block;" />
                 </div>
                 <div style="border-top: 1px dashed #cbd5e1; padding-top: 4px; font-size: 10px; color: #64748b; font-weight: 600;">Authorized Signatory</div>
               </div>
             </div>
           </div>
-          <script>window.onload = function() { window.print(); };</script>
+          <script>
+            window.onload = function() {
+              setTimeout(function() { window.print(); }, 250);
+            };
+          </script>
         </body>
       </html>
     `);
