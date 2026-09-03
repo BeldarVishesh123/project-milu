@@ -786,7 +786,7 @@ const sendAdminOrderNotificationEmail = async (order) => {
 // Send Order Mobile SMS Alert to Admin Mobile Number
 const sendAdminSMSOrderAlert = async (order) => {
     try {
-        const adminMobile = process.env.ADMIN_MOBILE_PHONE || '+919876543210';
+        const adminMobile = process.env.ADMIN_MOBILE_PHONE || '+919825160993';
         const shippingInfo = order.items?.shipping || order.shipping || {};
         const customerName = shippingInfo.fullName || shippingInfo.name || 'Valued Customer';
         const total = order.total || order.grandTotal || 0;
@@ -3157,7 +3157,7 @@ let mockReviews = [];
 let mockStoreSettings = {
     company_name: 'Krishiv Corporation',
     email: 'contact@krishiv.co',
-    phone: '+91 98765 43210',
+    phone: '+91 98251 60993',
     address: 'Krishiv Hub, Science City Road, Surat, Gujarat, India',
     gst_number: '24APTPK3284N1Z6',
     currency: '₹',

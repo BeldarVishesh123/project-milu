@@ -99,7 +99,7 @@ export default function AdminDashboard({ onNavigateHome }) {
   const [storeSettings, setStoreSettings] = useState({
     company_name: 'Krishiv Corporation',
     email: 'contact@krishiv.co',
-    phone: '+91 98765 43210',
+    phone: '+91 98251 60993',
     address: 'Krishiv Hub, Surat, Gujarat, India',
     gst_number: '24AAACK1234F1Z9',
     currency: '₹',

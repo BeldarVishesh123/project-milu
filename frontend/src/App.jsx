@@ -1565,7 +1565,7 @@ export default function App() {
           prefill: {
             name: shippingDetails.name || user?.name || '',
             email: shippingDetails.email || user?.email || 'krishivcorporation4513@gmail.com',
-            contact: shippingDetails.phone || user?.phone || '9876543210'
+            contact: shippingDetails.phone || user?.phone || '9825160993'
           },
           theme: {
             color: "#8f8269"
@@ -2459,7 +2459,7 @@ export default function App() {
                   <PhoneCall className="contact-icon" style={{ width: '20px', height: '20px' }} />
                   <div>
                     <div className="contact-label">Contact Number</div>
-                    <div className="contact-val">+91 98765 43210</div>
+                    <div className="contact-val">+91 98251 60993</div>
                   </div>
                 </div>
                 <div className="contact-item">
@@ -3839,7 +3839,7 @@ export default function App() {
                           type="tel" 
                           required 
                           pattern="[0-9]{10}"
-                          placeholder="9876543210" 
+                          placeholder="9825160993" 
                           value={shippingPhone} 
                           onChange={(e) => setShippingPhone(e.target.value)} 
                           className="glass-input" 
