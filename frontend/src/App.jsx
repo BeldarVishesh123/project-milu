@@ -79,6 +79,7 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   
   // Form States & Multi-field Auth States
@@ -361,9 +362,12 @@ export default function App() {
       case 'addresses': return '/addresses';
       case 'payments': return '/payments';
       case 'settings': return '/settings';
-      case 'product-details': return prod ? `/product-details?id=${prod.id}` : '/';
+      case 'product-details': {
+        const p = params.product || prod;
+        return p ? `/product-details?id=${p.id}` : '/';
+      }
       case 'product-reviews': {
-        const p = prod || params.product;
+        const p = params.product || prod;
         const slug = p ? (p.name ? p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : p.id) : (params.id || 'orange-peel');
         return `/product/${slug}/reviews`;
       }
@@ -377,6 +381,14 @@ export default function App() {
     if (extraParams.product) setSelectedProduct(extraParams.product);
     if (extraParams.order) setActiveOrder(extraParams.order);
     if (extraParams.category) setSelectedCategory(extraParams.category);
+
+    if (newPage === 'product-details') {
+      setIsDetailsModalOpen(true);
+    } else if (newPage === 'product-reviews') {
+      setIsDetailsModalOpen(false);
+    } else if (!extraParams.keepModalOpen) {
+      setIsDetailsModalOpen(false);
+    }
 
     if (typeof window !== 'undefined') {
       try {
@@ -469,16 +481,33 @@ export default function App() {
       setPage(targetPage);
       if (catFromUrl) setSelectedCategory(catFromUrl);
 
-      if (idFromUrl) {
-        if (targetPage === 'product-details' && products.length > 0) {
+      if (targetPage === 'product-details') {
+        if (idFromUrl && products.length > 0) {
           const foundProd = products.find(p => String(p.id) === String(idFromUrl));
           if (foundProd) setSelectedProduct(foundProd);
-        } else if ((targetPage === 'order-details' || targetPage === 'track-order') && userOrders.length > 0) {
-          const foundOrder = userOrders.find(o => String(o.id) === String(idFromUrl));
-          if (foundOrder) setActiveOrder(foundOrder);
         }
+        setIsDetailsModalOpen(true);
+      } else if (targetPage === 'product-reviews' || window.location.pathname.includes('/reviews')) {
+        const match = window.location.pathname.match(/\/product\/([^\/]+)\/reviews/);
+        const slug = match ? match[1] : (idFromUrl || params.get('product'));
+        if (slug && products.length > 0) {
+          const foundProd = products.find(p => {
+            const pSlug = p.name ? p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : String(p.id);
+            return pSlug === slug || String(p.id) === slug || (p._id && String(p._id) === slug);
+          });
+          if (foundProd) setSelectedProduct(foundProd);
+        }
+        setIsDetailsModalOpen(false);
       } else {
-        if (targetPage !== 'product-details') setSelectedProduct(null);
+        setIsDetailsModalOpen(false);
+        if (idFromUrl) {
+          if ((targetPage === 'order-details' || targetPage === 'track-order') && userOrders.length > 0) {
+            const foundOrder = userOrders.find(o => String(o.id) === String(idFromUrl));
+            if (foundOrder) setActiveOrder(foundOrder);
+          }
+        } else {
+          setSelectedProduct(null);
+        }
       }
       window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -575,13 +604,16 @@ export default function App() {
     const initialPage = params.get('page') || window.location.pathname.replace(/^\//, '');
     const initialId = params.get('id');
 
-    if (initialId && initialId !== 'undefined') {
-      if ((initialPage === 'product-details' || window.location.pathname === '/product-details') && products.length > 0) {
+    if (products.length > 0) {
+      if ((initialPage === 'product-details' || window.location.pathname === '/product-details') && initialId && initialId !== 'undefined') {
         const found = products.find(p => String(p.id) === String(initialId));
-        if (found) setSelectedProduct(found);
-      } else if ((initialPage === 'product-reviews' || window.location.pathname.includes('/reviews')) && products.length > 0) {
+        if (found) {
+          setSelectedProduct(found);
+          setIsDetailsModalOpen(true);
+        }
+      } else if (initialPage === 'product-reviews' || window.location.pathname.includes('/reviews')) {
         const match = window.location.pathname.match(/\/product\/([^\/]+)\/reviews/);
-        const slug = match ? match[1] : (params.get('id') || params.get('product'));
+        const slug = match ? match[1] : (initialId || params.get('product'));
         if (slug) {
           const found = products.find(p => {
             const pSlug = p.name ? p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : String(p.id);
@@ -591,7 +623,11 @@ export default function App() {
         } else if (!selectedProduct) {
           setSelectedProduct(products[0]);
         }
-      } else if (initialPage === 'order-details' || initialPage === 'order-success' || initialPage === 'track-order' || window.location.pathname.includes('order')) {
+        setIsDetailsModalOpen(false);
+      }
+    }
+
+    if (initialId && initialId !== 'undefined') {
         let found = userOrders.find(o => String(o.id) === String(initialId) || String(o._id) === String(initialId));
         if (!found) {
           const cached = localStorage.getItem('krishiv_last_order');
@@ -622,7 +658,6 @@ export default function App() {
             .catch(err => console.warn('Database order resolution note:', err.message));
         }
       }
-    }
   }, [products, userOrders]);
 
   // Persist current page to localStorage for single page navigation tracking
@@ -2567,7 +2602,7 @@ export default function App() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', fontSize: '14px' }}>
                 <button 
                   onClick={() => {
-                    setSelectedProduct(activeProd);
+                    setIsDetailsModalOpen(false);
                     changePage('category');
                   }}
                   className="btn-secondary"
@@ -2610,6 +2645,7 @@ export default function App() {
                   <button 
                     onClick={() => {
                       setSelectedProduct(activeProd);
+                      setIsDetailsModalOpen(true);
                     }}
                     className="btn-secondary"
                     style={{ padding: '10px 16px', fontSize: '13px' }}
@@ -4684,11 +4720,23 @@ export default function App() {
       </main>
 
       {/* Product Details Modal */}
-      {selectedProduct && (
-        <div className="modal-overlay" style={{ zIndex: 99995 }}>
+      {selectedProduct && isDetailsModalOpen && (
+        <div 
+          className="modal-overlay" 
+          style={{ zIndex: 99995 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsDetailsModalOpen(false);
+              if (page === 'product-details') changePage('category');
+            }
+          }}
+        >
           <div className="glass-panel modal-content" style={{ background: '#FFFFFF', borderRadius: '24px', maxWidth: '840px', width: '95%', maxHeight: '90vh', overflowY: 'auto' }}>
             <button 
-              onClick={() => { setSelectedProduct(null); if (page === 'product-details') changePage('category'); }} 
+              onClick={() => { 
+                setIsDetailsModalOpen(false); 
+                if (page === 'product-details') changePage('category'); 
+              }} 
               className="modal-close"
               aria-label="Close details"
             >
@@ -4770,14 +4818,18 @@ export default function App() {
                   onReviewChanged={handleReviewChanged}
                   onOpenFullReviews={() => {
                     const prod = selectedProduct;
-                    setSelectedProduct(null);
+                    setIsDetailsModalOpen(false);
                     changePage('product-reviews', { product: prod, id: prod.id });
                   }}
                 />
               </div>
 
                <button 
-                onClick={() => { addToCart(selectedProduct); setSelectedProduct(null); if (page === 'product-details') changePage('cart'); }}
+                onClick={() => { 
+                  addToCart(selectedProduct); 
+                  setIsDetailsModalOpen(false); 
+                  if (page === 'product-details') changePage('cart'); 
+                }}
                 disabled={isOutOfStock(selectedProduct)}
                 className="btn-primary"
                 style={{ padding: '12px', fontSize: '12px', width: '100%', marginTop: '16px', opacity: isOutOfStock(selectedProduct) ? 0.5 : 1, cursor: isOutOfStock(selectedProduct) ? 'not-allowed' : 'pointer' }}
