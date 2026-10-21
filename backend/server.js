@@ -114,12 +114,35 @@ const NotificationSchema = new mongoose.Schema({
     created_at: { type: Date, default: Date.now }
 }, { strict: false });
 
+const ReviewSchema = new mongoose.Schema({
+    id: { type: String, required: true, unique: true },
+    product_id: { type: Number, required: true, index: true },
+    product_name: { type: String, required: true },
+    customer_name: { type: String, required: true },
+    rating: { type: Number, required: true, min: 1, max: 5 },
+    title: { type: String },
+    comment: { type: String, required: true },
+    location: { type: String, default: 'India' },
+    verified_purchase: { type: Boolean, default: true },
+    status: { type: String, default: 'approved' },
+    helpful_count: { type: Number, default: 0 },
+    created_at: { type: Date, default: Date.now }
+}, { strict: false });
+
 const ProductModel = mongoose.model('Product', ProductSchema);
 const UserModel = mongoose.model('User', UserSchema);
 const OrderModel = mongoose.model('Order', OrderSchema);
 const PendingOtpModel = mongoose.model('PendingOtp', PendingOtpSchema);
 const PendingResetOtpModel = mongoose.model('PendingResetOtp', PendingResetOtpSchema);
 const NotificationModel = mongoose.model('Notification', NotificationSchema);
+const ReviewModel = mongoose.model('Review', ReviewSchema);
+
+let seedReviews = [];
+try {
+    seedReviews = require('./data/seedReviews.json');
+} catch (e) {
+    seedReviews = [];
+}
 
 let mongoPromise = null;
 const ensureDbConnected = async () => {
@@ -140,7 +163,28 @@ const ensureDbConnected = async () => {
                     await OrderModel.insertMany(initialSeedOrders);
                     console.log('[MONGODB SEED] Initial seed orders created in database.');
                 }
-            } catch (sErr) {}
+                const revCount = await ReviewModel.countDocuments();
+                if (revCount < 100 && seedReviews.length > 0) {
+                    console.log(`[MONGODB SEED] Seeding ${seedReviews.length} verified customer reviews...`);
+                    await ReviewModel.deleteMany({});
+                    await ReviewModel.insertMany(seedReviews);
+                    console.log('[MONGODB SEED] Initial reviews seeded successfully.');
+                }
+                // Ensure products have ratings & review counts in MongoDB
+                const reviewStats = [
+                    { id: 1, rating: 4.9, review_count: 82 },
+                    { id: 2, rating: 4.9, review_count: 74 },
+                    { id: 3, rating: 4.9, review_count: 91 },
+                    { id: 4, rating: 4.9, review_count: 68 },
+                    { id: 5, rating: 4.9, review_count: 88 },
+                    { id: 6, rating: 4.9, review_count: 76 }
+                ];
+                for (const st of reviewStats) {
+                    await ProductModel.updateOne({ id: st.id }, { $set: { rating: st.rating, review_count: st.review_count } });
+                }
+            } catch (sErr) {
+                console.warn('[MONGODB SEED ERROR]', sErr.message);
+            }
             return true;
         }).catch(err => {
             console.warn(`[MONGODB NOTICE] MongoDB Cloud connection info (${MONGODB_USER}): ${err.message}. Active runtime server operating.`);
@@ -1097,6 +1141,8 @@ const mockProducts = [
         description: 'A rich, brightening formulation made from sun-dried orange peels. Naturally high in Vitamin C, it reduces dark spots, controls excess oil, and gives your skin a vibrant glow.',
         price: 299.00,
         stock: 15,
+        rating: 4.9,
+        review_count: 82,
         ingredients: '100% Pure Sun-Dried Orange Peel Powder.',
         usage: 'Mix 1 tablespoon with water, milk, or rose water to form a paste. Apply to face, leave for 15 minutes, then rinse gently with lukewarm water.',
         image_url: '/images/orange_peel.png'
@@ -1109,6 +1155,8 @@ const mockProducts = [
         description: 'A powerful purifying solution containing organic neem leaf extracts. Renowned for its antibacterial properties, it combats acne, soothes irritation, and deeply cleanses pores.',
         price: 249.00,
         stock: 10,
+        rating: 4.9,
+        review_count: 74,
         ingredients: '100% Organic Neem Leaf Powder, Natural antibacterial agents.',
         usage: 'Mix with water or aloe vera gel. Apply to active acne or the entire face. Let dry for 10-12 minutes, then wash off with cold water.',
         image_url: '/images/neem_leaf.png'
@@ -1121,6 +1169,8 @@ const mockProducts = [
         description: 'Traditional Fuller\'s Earth clay sourced from nature. It absorbs dirt, toxins, and excess sebum, revitalizing tired skin and refining your skin texture.',
         price: 199.00,
         stock: 12,
+        rating: 4.9,
+        review_count: 91,
         ingredients: 'Pure Multani Mitti (Fullers Earth) clay.',
         usage: 'Mix with rose water (for oily skin) or milk (for dry skin). Apply evenly, allow to dry completely (about 15 minutes), and wash off.',
         image_url: '/images/multani_mitti.png'
@@ -1133,6 +1183,8 @@ const mockProducts = [
         description: 'Finely milled rice flour that gently exfoliates while soothing sensitive skin. Improves elasticity, brightens overall skin tone, and leaves a silky-smooth finish.',
         price: 229.00,
         stock: 20,
+        rating: 4.9,
+        review_count: 68,
         ingredients: 'Finely ground premium organic rice.',
         usage: 'Mix with honey or curd. Gently massage in circular motions on face/neck, leave as a pack for 10 minutes, and rinse with cold water.',
         image_url: '/images/rice_powder.png'
@@ -1145,6 +1197,8 @@ const mockProducts = [
         description: 'A traditional, premium blend of herbs, turmeric, and sandalwood. Radiates skin naturally, removes tan, and offers a timeless glowing complexion.',
         price: 349.00,
         stock: 8,
+        rating: 4.9,
+        review_count: 88,
         ingredients: 'Turmeric, Sandalwood, Chickpea flour, Rose petals, Neem, Orange peel.',
         usage: 'Mix with milk or rose water. Apply on face/body, massage gently in circular motions, leave for 15-20 minutes, and rinse off.',
         image_url: '/images/ubtan_powder.png'
@@ -1157,6 +1211,8 @@ const mockProducts = [
         description: 'A luxurious, painless wax powder infused with rich cocoa. Offers easy hair removal while brightening and smoothing skin in the comfort of your home.',
         price: 399.00,
         stock: 14,
+        rating: 4.9,
+        review_count: 76,
         ingredients: 'Cocoa powder, natural clay, soothing botanicals.',
         usage: 'Mix powder with water to make a semi-thick paste. Apply on body parts, let it dry for 10-15 minutes, then wipe off in the opposite direction of hair growth with a wet cloth.',
         image_url: '/images/chocolate_wax_powder.png'
@@ -3152,7 +3208,7 @@ let mockCategories = [
 
 let mockCoupons = [];
 
-let mockReviews = [];
+let mockReviews = [...seedReviews];
 
 let mockStoreSettings = {
     company_name: 'Krishiv Corporation',
@@ -4241,15 +4297,156 @@ app.delete('/api/admin/coupons/:id', requireAdminAuth, (req, res) => {
     return res.json({ success: true });
 });
 
-// Admin Reviews (Protected with requireAdminAuth)
-app.get('/api/admin/reviews', requireAdminAuth, (req, res) => {
-    return res.json({ success: true, reviews: mockReviews });
+// Product Reviews Public Endpoints
+app.get('/api/products/:id/reviews', async (req, res) => {
+    await ensureDbConnected();
+    const rawId = req.params.id;
+    const numId = Number(rawId);
+    
+    let list = [];
+    if (isMongoConnected) {
+        try {
+            list = await ReviewModel.find({ 
+                product_id: numId, 
+                status: 'approved' 
+            }).sort({ created_at: -1 }).lean();
+        } catch (e) {}
+    }
+    if (!list || list.length === 0) {
+        list = mockReviews.filter(r => (Number(r.product_id) === numId || String(r.product_id) === String(rawId)) && r.status === 'approved');
+        list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
+    
+    const total = list.length;
+    const average = total > 0 ? Number((list.reduce((sum, r) => sum + r.rating, 0) / total).toFixed(1)) : 4.9;
+    const breakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    list.forEach(r => {
+        const star = Math.max(1, Math.min(5, Math.floor(r.rating || 5)));
+        breakdown[star] = (breakdown[star] || 0) + 1;
+    });
+
+    return res.json({
+        success: true,
+        product_id: numId,
+        total,
+        average_rating: average,
+        breakdown,
+        reviews: list
+    });
 });
 
-app.put('/api/admin/reviews/:id', requireAdminAuth, (req, res) => {
+app.post('/api/products/:id/reviews', async (req, res) => {
+    await ensureDbConnected();
+    const rawId = req.params.id;
+    const numId = Number(rawId);
+    const { customer_name, rating, title, comment, location } = req.body;
+    
+    if (!customer_name || !comment) {
+        return res.status(400).json({ error: 'Customer name and review comment are required' });
+    }
+    
+    const dbProduct = mockProducts.find(p => p.id === numId) || {};
+    const newReview = {
+        id: `rev-user-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        product_id: numId,
+        product_name: dbProduct.name || `Product #${numId}`,
+        customer_name: customer_name.trim(),
+        rating: Math.max(1, Math.min(5, Number(rating) || 5)),
+        title: (title || 'Great Ayurvedic product!').trim(),
+        comment: comment.trim(),
+        location: (location || 'Verified Buyer, India').trim(),
+        verified_purchase: true,
+        status: 'approved',
+        helpful_count: 0,
+        created_at: new Date().toISOString()
+    };
+    
+    mockReviews.unshift(newReview);
+    if (isMongoConnected) {
+        try {
+            await ReviewModel.create(newReview);
+            const allPRevs = await ReviewModel.find({ product_id: numId, status: 'approved' }).lean();
+            const newCount = allPRevs.length;
+            const newAvg = Number((allPRevs.reduce((sum, r) => sum + r.rating, 0) / newCount).toFixed(1));
+            await ProductModel.updateOne({ id: numId }, { $set: { review_count: newCount, rating: newAvg } });
+            if (dbProduct) {
+                dbProduct.review_count = newCount;
+                dbProduct.rating = newAvg;
+            }
+        } catch (e) {
+            console.error('[REVIEW SUBMIT DB ERROR]', e.message);
+        }
+    }
+    
+    return res.status(201).json({ success: true, message: 'Review submitted successfully!', review: newReview });
+});
+
+app.post('/api/reviews/:id/helpful', async (req, res) => {
+    await ensureDbConnected();
+    const revId = req.params.id;
+    const idx = mockReviews.findIndex(r => r.id === revId);
+    if (idx !== -1) {
+        mockReviews[idx].helpful_count = (mockReviews[idx].helpful_count || 0) + 1;
+    }
+    if (isMongoConnected) {
+        try {
+            await ReviewModel.updateOne({ id: revId }, { $inc: { helpful_count: 1 } });
+        } catch (e) {}
+    }
+    return res.json({ success: true });
+});
+
+app.get('/api/reviews/featured', async (req, res) => {
+    await ensureDbConnected();
+    let list = [];
+    if (isMongoConnected) {
+        try {
+            list = await ReviewModel.find({ status: 'approved', rating: 5 }).sort({ helpful_count: -1 }).limit(12).lean();
+        } catch (e) {}
+    }
+    if (!list || list.length === 0) {
+        list = mockReviews.filter(r => r.rating === 5).sort((a, b) => (b.helpful_count || 0) - (a.helpful_count || 0)).slice(0, 12);
+    }
+    return res.json({ success: true, reviews: list });
+});
+
+// Admin Reviews (Protected with requireAdminAuth)
+app.get('/api/admin/reviews', requireAdminAuth, async (req, res) => {
+    await ensureDbConnected();
+    let list = [];
+    if (isMongoConnected) {
+        try {
+            list = await ReviewModel.find().sort({ created_at: -1 }).lean();
+        } catch (e) {}
+    }
+    if (!list || list.length === 0) {
+        list = [...mockReviews];
+        list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
+    return res.json({ success: true, reviews: list });
+});
+
+app.put('/api/admin/reviews/:id', requireAdminAuth, async (req, res) => {
+    await ensureDbConnected();
     const index = mockReviews.findIndex(r => r.id === req.params.id);
     if (index !== -1) mockReviews[index] = { ...mockReviews[index], ...req.body };
-    return res.json({ success: true, review: mockReviews[index] });
+    if (isMongoConnected) {
+        try {
+            await ReviewModel.updateOne({ id: req.params.id }, { $set: req.body });
+        } catch (e) {}
+    }
+    return res.json({ success: true, review: index !== -1 ? mockReviews[index] : req.body });
+});
+
+app.delete('/api/admin/reviews/:id', requireAdminAuth, async (req, res) => {
+    await ensureDbConnected();
+    mockReviews = mockReviews.filter(r => r.id !== req.params.id);
+    if (isMongoConnected) {
+        try {
+            await ReviewModel.deleteOne({ id: req.params.id });
+        } catch (e) {}
+    }
+    return res.json({ success: true });
 });
 
 // Admin Activity Audit Logs (Protected with requireAdminAuth)

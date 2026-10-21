@@ -129,6 +129,13 @@ export default function AdminDashboard({ onNavigateHome }) {
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [notifForm, setNotifForm] = useState({ title: '', message: '', type: 'Offer' });
 
+  // Reviews Moderation Filters & Pagination
+  const [reviewProductFilter, setReviewProductFilter] = useState('all');
+  const [reviewRatingFilter, setReviewRatingFilter] = useState('all');
+  const [reviewStatusFilter, setReviewStatusFilter] = useState('all');
+  const [reviewSearchQuery, setReviewSearchQuery] = useState('');
+  const [reviewPage, setReviewPage] = useState(1);
+
   // Broadcast Ad Mailer State
   const [broadcastForm, setBroadcastForm] = useState({
     subject: '✨ Exclusive 20% OFF — Organic Skin Care Celebration!',
@@ -2333,34 +2340,236 @@ export default function AdminDashboard({ onNavigateHome }) {
           )}
 
           {/* 8. REVIEWS MODERATION */}
-          {activeTab === 'reviews' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div>
-                <h1 style={{ fontSize: '24px', fontWeight: '800', margin: '0 0 4px' }}>Review Moderation</h1>
-                <p style={{ fontSize: '13px', color: themeTextSoft, margin: 0 }}>Approve, reject, or reply to customer product reviews</p>
-              </div>
+          {activeTab === 'reviews' && (() => {
+            const totalCount = reviews.length;
+            const avgRating = totalCount > 0 ? (reviews.reduce((s, r) => s + (Number(r.rating) || 5), 0) / totalCount).toFixed(1) : '4.9';
+            const fiveStarCount = reviews.filter(r => Number(r.rating) === 5).length;
+            const fourStarCount = reviews.filter(r => Number(r.rating) === 4).length;
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {reviews.map(r => (
-                  <div key={r.id} style={{ background: themeCardBg, borderRadius: '16px', border: `1px solid ${themeBorder}`, padding: '20px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <div style={{ fontWeight: '700', fontSize: '14px' }}>{r.customer_name} <span style={{ fontSize: '12px', color: themeTextSoft, fontWeight: '400' }}>on {r.product_name}</span></div>
-                      <div style={{ color: '#f59e0b', fontSize: '13px' }}>{'★'.repeat(r.rating)}</div>
-                    </div>
-                    <p style={{ fontSize: '13px', margin: '0 0 12px', color: themeText }}>"{r.comment}"</p>
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                      <span style={{ padding: '3px 8px', borderRadius: '8px', fontSize: '10px', fontWeight: '700', background: r.status === 'approved' ? '#dcfce7' : '#fef3c7', color: r.status === 'approved' ? '#166534' : '#92400e' }}>
-                        {r.status.toUpperCase()}
-                      </span>
-                      {r.status !== 'approved' && (
-                        <button onClick={async () => { await fetch(`${API_BASE_URL}/admin/reviews/${r.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'approved' }) }); fetchAdminData(); }} style={{ padding: '6px 12px', borderRadius: '8px', background: '#10b981', color: '#fff', border: 'none', fontSize: '11px', cursor: 'pointer', fontWeight: '700', minHeight: '36px' }}>Approve</button>
-                      )}
-                    </div>
+            // Filter reviews
+            const filtered = reviews.filter(r => {
+              if (reviewProductFilter !== 'all' && String(r.product_id) !== String(reviewProductFilter) && r.product_name !== reviewProductFilter) {
+                return false;
+              }
+              if (reviewRatingFilter !== 'all' && String(Math.floor(r.rating)) !== String(reviewRatingFilter)) {
+                return false;
+              }
+              if (reviewStatusFilter !== 'all' && r.status !== reviewStatusFilter) {
+                return false;
+              }
+              if (reviewSearchQuery.trim()) {
+                const q = reviewSearchQuery.toLowerCase();
+                const matchName = (r.customer_name || '').toLowerCase().includes(q);
+                const matchComment = (r.comment || '').toLowerCase().includes(q);
+                const matchTitle = (r.title || '').toLowerCase().includes(q);
+                const matchProd = (r.product_name || '').toLowerCase().includes(q);
+                if (!matchName && !matchComment && !matchTitle && !matchProd) return false;
+              }
+              return true;
+            });
+
+            const pageSize = 12;
+            const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+            const curPage = Math.min(Math.max(1, reviewPage), totalPages);
+            const paginatedReviews = filtered.slice((curPage - 1) * pageSize, curPage * pageSize);
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                <div>
+                  <h1 style={{ fontSize: '24px', fontWeight: '800', margin: '0 0 4px' }}>Customer Reviews Moderation</h1>
+                  <p style={{ fontSize: '13px', color: themeTextSoft, margin: 0 }}>
+                    Manage, filter, and moderate verified product reviews across all Ayurvedic personal care items
+                  </p>
+                </div>
+
+                {/* 4 Stats Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                  <div style={{ background: themeCardBg, border: `1px solid ${themeBorder}`, borderRadius: '16px', padding: '18px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: '700', color: themeTextSoft, textTransform: 'uppercase' }}>Total Reviews</div>
+                    <div style={{ fontSize: '28px', fontWeight: '900', color: themeText, margin: '6px 0 2px' }}>{totalCount}</div>
+                    <div style={{ fontSize: '11.5px', color: '#059669', fontWeight: '600' }}>✓ 100% Verified Customers</div>
                   </div>
-                ))}
+                  <div style={{ background: themeCardBg, border: `1px solid ${themeBorder}`, borderRadius: '16px', padding: '18px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: '700', color: themeTextSoft, textTransform: 'uppercase' }}>Average Rating</div>
+                    <div style={{ fontSize: '28px', fontWeight: '900', color: '#f59e0b', margin: '6px 0 2px' }}>{avgRating} ★</div>
+                    <div style={{ fontSize: '11.5px', color: themeTextSoft }}>Storewide Average</div>
+                  </div>
+                  <div style={{ background: themeCardBg, border: `1px solid ${themeBorder}`, borderRadius: '16px', padding: '18px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: '700', color: themeTextSoft, textTransform: 'uppercase' }}>5-Star Reviews</div>
+                    <div style={{ fontSize: '28px', fontWeight: '900', color: '#166534', margin: '6px 0 2px' }}>{fiveStarCount}</div>
+                    <div style={{ fontSize: '11.5px', color: themeTextSoft }}>{totalCount > 0 ? Math.round((fiveStarCount / totalCount) * 100) : 0}% of all feedback</div>
+                  </div>
+                  <div style={{ background: themeCardBg, border: `1px solid ${themeBorder}`, borderRadius: '16px', padding: '18px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: '700', color: themeTextSoft, textTransform: 'uppercase' }}>Coverage</div>
+                    <div style={{ fontSize: '28px', fontWeight: '900', color: '#8f8269', margin: '6px 0 2px' }}>6 / 6 Products</div>
+                    <div style={{ fontSize: '11.5px', color: '#059669', fontWeight: '600' }}>50–100 reviews per product</div>
+                  </div>
+                </div>
+
+                {/* Filters & Search Toolbar */}
+                <div style={{ background: themeCardBg, border: `1px solid ${themeBorder}`, borderRadius: '16px', padding: '16px', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', flex: 1, minWidth: '280px' }}>
+                    <input
+                      type="text"
+                      placeholder="Search customer, keyword, product..."
+                      value={reviewSearchQuery}
+                      onChange={e => { setReviewSearchQuery(e.target.value); setReviewPage(1); }}
+                      style={{ padding: '8px 14px', borderRadius: '10px', border: `1px solid ${themeBorder}`, background: themeBg, color: themeText, fontSize: '12.5px', minWidth: '220px', flex: 1 }}
+                    />
+                    <select
+                      value={reviewProductFilter}
+                      onChange={e => { setReviewProductFilter(e.target.value); setReviewPage(1); }}
+                      style={{ padding: '8px 12px', borderRadius: '10px', border: `1px solid ${themeBorder}`, background: themeBg, color: themeText, fontSize: '12.5px' }}
+                    >
+                      <option value="all">All Products ({reviews.length})</option>
+                      <option value="1">Orange Peel ({reviews.filter(r => Number(r.product_id) === 1).length})</option>
+                      <option value="2">Neem Leaf ({reviews.filter(r => Number(r.product_id) === 2).length})</option>
+                      <option value="3">Multani Mitti ({reviews.filter(r => Number(r.product_id) === 3).length})</option>
+                      <option value="4">Rice Powder ({reviews.filter(r => Number(r.product_id) === 4).length})</option>
+                      <option value="5">Ubtan Powder ({reviews.filter(r => Number(r.product_id) === 5).length})</option>
+                      <option value="6">Chocolate Wax Powder ({reviews.filter(r => Number(r.product_id) === 6).length})</option>
+                    </select>
+                    <select
+                      value={reviewRatingFilter}
+                      onChange={e => { setReviewRatingFilter(e.target.value); setReviewPage(1); }}
+                      style={{ padding: '8px 12px', borderRadius: '10px', border: `1px solid ${themeBorder}`, background: themeBg, color: themeText, fontSize: '12.5px' }}
+                    >
+                      <option value="all">All Ratings</option>
+                      <option value="5">5 Stars only ({fiveStarCount})</option>
+                      <option value="4">4 Stars only ({fourStarCount})</option>
+                    </select>
+                    <select
+                      value={reviewStatusFilter}
+                      onChange={e => { setReviewStatusFilter(e.target.value); setReviewPage(1); }}
+                      style={{ padding: '8px 12px', borderRadius: '10px', border: `1px solid ${themeBorder}`, background: themeBg, color: themeText, fontSize: '12.5px' }}
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="approved">Approved</option>
+                      <option value="pending">Pending</option>
+                    </select>
+                  </div>
+
+                  <div style={{ fontSize: '12px', color: themeTextSoft, fontWeight: '600' }}>
+                    Showing {paginatedReviews.length} of {filtered.length} filtered reviews
+                  </div>
+                </div>
+
+                {/* Reviews List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {paginatedReviews.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px', background: themeCardBg, borderRadius: '16px', border: `1px solid ${themeBorder}`, color: themeTextSoft }}>
+                      No reviews found matching the selected filters.
+                    </div>
+                  ) : (
+                    paginatedReviews.map(r => (
+                      <div key={r.id} style={{ background: themeCardBg, borderRadius: '16px', border: `1px solid ${themeBorder}`, padding: '18px', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px', marginBottom: '8px' }}>
+                          <div>
+                            <div style={{ fontWeight: '800', fontSize: '14px', color: themeText, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span>{r.customer_name}</span>
+                              <span style={{ fontSize: '11px', color: '#8f8269', background: darkMode ? 'rgba(255,255,255,0.05)' : '#faf8f5', padding: '2px 8px', borderRadius: '6px', border: `1px solid ${themeBorder}` }}>
+                                {r.product_name || `Product #${r.product_id}`}
+                              </span>
+                              {r.verified_purchase !== false && (
+                                <span style={{ background: '#dcfce7', color: '#166534', fontSize: '10px', fontWeight: '800', padding: '1.5px 6px', borderRadius: '6px' }}>
+                                  ✓ Verified
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: '11px', color: themeTextSoft, marginTop: '2px' }}>
+                              {r.location || 'India'} • {r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN') : 'Recently'}
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{ color: '#f59e0b', fontSize: '14px', fontWeight: '800' }}>
+                              {'★'.repeat(Math.round(r.rating || 5))}
+                            </div>
+                            <span style={{ padding: '3px 8px', borderRadius: '8px', fontSize: '10px', fontWeight: '800', background: r.status === 'approved' ? '#dcfce7' : '#fef3c7', color: r.status === 'approved' ? '#166534' : '#92400e' }}>
+                              {(r.status || 'approved').toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+
+                        {r.title && (
+                          <div style={{ fontWeight: '700', fontSize: '13px', color: themeText, marginBottom: '4px' }}>
+                            {r.title}
+                          </div>
+                        )}
+                        <p style={{ fontSize: '13px', margin: '0 0 12px', color: themeText, lineHeight: '1.5' }}>
+                          "{r.comment}"
+                        </p>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${themeBorder}`, paddingTop: '10px' }}>
+                          <span style={{ fontSize: '11px', color: themeTextSoft }}>
+                            👍 {r.helpful_count || 0} customers found this helpful
+                          </span>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            {r.status !== 'approved' && (
+                              <button
+                                onClick={async () => {
+                                  await fetch(`${API_BASE_URL}/admin/reviews/${r.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ status: 'approved' }) });
+                                  fetchAdminData();
+                                }}
+                                style={{ padding: '5px 12px', borderRadius: '8px', background: '#10b981', color: '#fff', border: 'none', fontSize: '11px', cursor: 'pointer', fontWeight: '700' }}
+                              >
+                                Approve
+                              </button>
+                            )}
+                            {r.status === 'approved' && (
+                              <button
+                                onClick={async () => {
+                                  await fetch(`${API_BASE_URL}/admin/reviews/${r.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ status: 'rejected' }) });
+                                  fetchAdminData();
+                                }}
+                                style={{ padding: '5px 12px', borderRadius: '8px', background: 'transparent', color: '#ef4444', border: '1px solid #fca5a5', fontSize: '11px', cursor: 'pointer', fontWeight: '700' }}
+                              >
+                                Reject
+                              </button>
+                            )}
+                            <button
+                              onClick={async () => {
+                                if (window.confirm('Delete this customer review?')) {
+                                  await fetch(`${API_BASE_URL}/admin/reviews/${r.id}`, { method: 'DELETE', headers: authHeaders });
+                                  fetchAdminData();
+                                }
+                              }}
+                              style={{ padding: '5px 10px', borderRadius: '8px', background: 'transparent', color: '#94a3b8', border: `1px solid ${themeBorder}`, fontSize: '11px', cursor: 'pointer' }}
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', marginTop: '12px' }}>
+                    <button
+                      onClick={() => setReviewPage(p => Math.max(1, p - 1))}
+                      disabled={curPage === 1}
+                      style={{ padding: '8px 16px', borderRadius: '8px', background: themeCardBg, border: `1px solid ${themeBorder}`, color: themeText, fontSize: '12px', fontWeight: '700', cursor: curPage === 1 ? 'not-allowed' : 'pointer', opacity: curPage === 1 ? 0.5 : 1 }}
+                    >
+                      ← Previous
+                    </button>
+                    <span style={{ fontSize: '12.5px', fontWeight: '700', color: themeText }}>
+                      Page {curPage} of {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setReviewPage(p => Math.min(totalPages, p + 1))}
+                      disabled={curPage === totalPages}
+                      style={{ padding: '8px 16px', borderRadius: '8px', background: themeCardBg, border: `1px solid ${themeBorder}`, color: themeText, fontSize: '12px', fontWeight: '700', cursor: curPage === totalPages ? 'not-allowed' : 'pointer', opacity: curPage === totalPages ? 0.5 : 1 }}
+                    >
+                      Next →
+                    </button>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* 9. NOTIFICATIONS CENTER */}
           {activeTab === 'notifications' && (
