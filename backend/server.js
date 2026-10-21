@@ -118,16 +118,22 @@ const ReviewSchema = new mongoose.Schema({
     id: { type: String, required: true, unique: true },
     product_id: { type: Number, required: true, index: true },
     product_name: { type: String, required: true },
+    user_id: { type: String, required: true, index: true },
     customer_name: { type: String, required: true },
     rating: { type: Number, required: true, min: 1, max: 5 },
-    title: { type: String },
-    comment: { type: String, required: true },
+    title: { type: String, default: '' },
+    review_text: { type: String, required: true },
+    comment: { type: String }, // compatibility alias
     location: { type: String, default: 'India' },
-    verified_purchase: { type: Boolean, default: true },
-    status: { type: String, default: 'approved' },
+    verified_purchase: { type: Boolean, default: false },
+    status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'approved' },
     helpful_count: { type: Number, default: 0 },
-    created_at: { type: Date, default: Date.now }
+    helpful_voters: { type: [String], default: [] },
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
 }, { strict: false });
+
+ReviewSchema.index({ user_id: 1, product_id: 1 }, { unique: true });
 
 const ProductModel = mongoose.model('Product', ProductSchema);
 const UserModel = mongoose.model('User', UserSchema);
@@ -137,12 +143,30 @@ const PendingResetOtpModel = mongoose.model('PendingResetOtp', PendingResetOtpSc
 const NotificationModel = mongoose.model('Notification', NotificationSchema);
 const ReviewModel = mongoose.model('Review', ReviewSchema);
 
-let seedReviews = [];
-try {
-    seedReviews = require('./data/seedReviews.json');
-} catch (e) {
-    seedReviews = [];
-}
+// Synchronize real approved reviews to calculate exact product ratings and review counts
+const syncProductRatings = async (productId = null) => {
+    try {
+        if (!isMongoConnected) return;
+        const query = productId !== null ? { id: Number(productId) } : {};
+        const prods = await ProductModel.find(query).lean();
+        for (const prod of prods) {
+            const pId = Number(prod.id);
+            const approved = await ReviewModel.find({ product_id: pId, status: 'approved' }).lean();
+            const count = approved.length;
+            const avg = count > 0 
+                ? Number((approved.reduce((acc, r) => acc + (Number(r.rating) || 5), 0) / count).toFixed(1))
+                : 0;
+            await ProductModel.updateOne({ id: pId }, { $set: { rating: avg, review_count: count } });
+            const mockIdx = mockProducts.findIndex(p => Number(p.id) === pId);
+            if (mockIdx !== -1) {
+                mockProducts[mockIdx].rating = avg;
+                mockProducts[mockIdx].review_count = count;
+            }
+        }
+    } catch (e) {
+        console.error('[SYNC RATINGS ERROR]', e.message);
+    }
+};
 
 let mongoPromise = null;
 const ensureDbConnected = async () => {
@@ -163,27 +187,10 @@ const ensureDbConnected = async () => {
                     await OrderModel.insertMany(initialSeedOrders);
                     console.log('[MONGODB SEED] Initial seed orders created in database.');
                 }
-                const revCount = await ReviewModel.countDocuments();
-                if (revCount < 100 && seedReviews.length > 0) {
-                    console.log(`[MONGODB SEED] Seeding ${seedReviews.length} verified customer reviews...`);
-                    await ReviewModel.deleteMany({});
-                    await ReviewModel.insertMany(seedReviews);
-                    console.log('[MONGODB SEED] Initial reviews seeded successfully.');
-                }
-                // Ensure products have ratings & review counts in MongoDB
-                const reviewStats = [
-                    { id: 1, rating: 4.9, review_count: 82 },
-                    { id: 2, rating: 4.9, review_count: 74 },
-                    { id: 3, rating: 4.9, review_count: 91 },
-                    { id: 4, rating: 4.9, review_count: 68 },
-                    { id: 5, rating: 4.9, review_count: 88 },
-                    { id: 6, rating: 4.9, review_count: 76 }
-                ];
-                for (const st of reviewStats) {
-                    await ProductModel.updateOne({ id: st.id }, { $set: { rating: st.rating, review_count: st.review_count } });
-                }
+                // Automatically sync real review ratings and counts from Review collection
+                await syncProductRatings();
             } catch (sErr) {
-                console.warn('[MONGODB SEED ERROR]', sErr.message);
+                console.warn('[MONGODB SYNC ERROR]', sErr.message);
             }
             return true;
         }).catch(err => {
@@ -1141,8 +1148,8 @@ const mockProducts = [
         description: 'A rich, brightening formulation made from sun-dried orange peels. Naturally high in Vitamin C, it reduces dark spots, controls excess oil, and gives your skin a vibrant glow.',
         price: 299.00,
         stock: 15,
-        rating: 4.9,
-        review_count: 82,
+        rating: 0,
+        review_count: 0,
         ingredients: '100% Pure Sun-Dried Orange Peel Powder.',
         usage: 'Mix 1 tablespoon with water, milk, or rose water to form a paste. Apply to face, leave for 15 minutes, then rinse gently with lukewarm water.',
         image_url: '/images/orange_peel.png'
@@ -1155,8 +1162,8 @@ const mockProducts = [
         description: 'A powerful purifying solution containing organic neem leaf extracts. Renowned for its antibacterial properties, it combats acne, soothes irritation, and deeply cleanses pores.',
         price: 249.00,
         stock: 10,
-        rating: 4.9,
-        review_count: 74,
+        rating: 0,
+        review_count: 0,
         ingredients: '100% Organic Neem Leaf Powder, Natural antibacterial agents.',
         usage: 'Mix with water or aloe vera gel. Apply to active acne or the entire face. Let dry for 10-12 minutes, then wash off with cold water.',
         image_url: '/images/neem_leaf.png'
@@ -1169,8 +1176,8 @@ const mockProducts = [
         description: 'Traditional Fuller\'s Earth clay sourced from nature. It absorbs dirt, toxins, and excess sebum, revitalizing tired skin and refining your skin texture.',
         price: 199.00,
         stock: 12,
-        rating: 4.9,
-        review_count: 91,
+        rating: 0,
+        review_count: 0,
         ingredients: 'Pure Multani Mitti (Fullers Earth) clay.',
         usage: 'Mix with rose water (for oily skin) or milk (for dry skin). Apply evenly, allow to dry completely (about 15 minutes), and wash off.',
         image_url: '/images/multani_mitti.png'
@@ -1183,8 +1190,8 @@ const mockProducts = [
         description: 'Finely milled rice flour that gently exfoliates while soothing sensitive skin. Improves elasticity, brightens overall skin tone, and leaves a silky-smooth finish.',
         price: 229.00,
         stock: 20,
-        rating: 4.9,
-        review_count: 68,
+        rating: 0,
+        review_count: 0,
         ingredients: 'Finely ground premium organic rice.',
         usage: 'Mix with honey or curd. Gently massage in circular motions on face/neck, leave as a pack for 10 minutes, and rinse with cold water.',
         image_url: '/images/rice_powder.png'
@@ -1197,8 +1204,8 @@ const mockProducts = [
         description: 'A traditional, premium blend of herbs, turmeric, and sandalwood. Radiates skin naturally, removes tan, and offers a timeless glowing complexion.',
         price: 349.00,
         stock: 8,
-        rating: 4.9,
-        review_count: 88,
+        rating: 0,
+        review_count: 0,
         ingredients: 'Turmeric, Sandalwood, Chickpea flour, Rose petals, Neem, Orange peel.',
         usage: 'Mix with milk or rose water. Apply on face/body, massage gently in circular motions, leave for 15-20 minutes, and rinse off.',
         image_url: '/images/ubtan_powder.png'
@@ -1211,8 +1218,8 @@ const mockProducts = [
         description: 'A luxurious, painless wax powder infused with rich cocoa. Offers easy hair removal while brightening and smoothing skin in the comfort of your home.',
         price: 399.00,
         stock: 14,
-        rating: 4.9,
-        review_count: 76,
+        rating: 0,
+        review_count: 0,
         ingredients: 'Cocoa powder, natural clay, soothing botanicals.',
         usage: 'Mix powder with water to make a semi-thick paste. Apply on body parts, let it dry for 10-15 minutes, then wipe off in the opposite direction of hair growth with a wet cloth.',
         image_url: '/images/chocolate_wax_powder.png'
@@ -1320,7 +1327,7 @@ app.get('/api/notifications', async (req, res) => {
 
 // API ENDPOINTS
 
-// 1. Get Products
+// 1. Get Products (With Real Approved Review Count and Average Rating)
 app.get('/api/products', async (req, res) => {
     await ensureDbConnected();
     let productsList = [...mockProducts];
@@ -1339,6 +1346,29 @@ app.get('/api/products', async (req, res) => {
                 }
                 productsList = Array.from(map.values());
             }
+
+            // Real dynamic review statistics per product from database
+            const approvedReviews = await ReviewModel.find({ status: 'approved' }).lean();
+            const statsMap = new Map();
+            approvedReviews.forEach(r => {
+                const pId = Number(r.product_id);
+                if (!statsMap.has(pId)) statsMap.set(pId, { count: 0, sum: 0 });
+                const st = statsMap.get(pId);
+                st.count += 1;
+                st.sum += (Number(r.rating) || 5);
+            });
+
+            productsList = productsList.map(p => {
+                const pId = Number(p.id);
+                const st = statsMap.get(pId);
+                const count = st ? st.count : 0;
+                const avg = count > 0 ? Number((st.sum / count).toFixed(1)) : 0;
+                return {
+                    ...p,
+                    rating: avg,
+                    review_count: count
+                };
+            });
         } catch (mErr) {
             console.error('[MONGODB GET PRODUCTS ERROR]', mErr.message);
         }
@@ -1601,15 +1631,18 @@ app.post('/api/auth/signup/verify-otp', async (req, res) => {
 
     console.log(`[AUTH] Account successfully registered and verified: ${cleanEmail}`);
 
+    const customerToken = signCustomerToken(newUser);
     return res.json({
         success: true,
         message: 'Account successfully registered and verified!',
+        token: customerToken,
         user: {
             id: newUser.id,
             name: newUser.name,
             email: newUser.email,
             phone: newUser.phone,
-            provider: 'local'
+            provider: 'local',
+            token: customerToken
         }
     });
 });
@@ -1839,14 +1872,17 @@ app.post('/api/auth/login', async (req, res) => {
         });
     }
 
+    const customerToken = signCustomerToken(user);
     return res.json({
         success: true,
+        token: customerToken,
         user: {
             id: user.id,
             name: user.name || user.email.split('@')[0],
             email: user.email,
             phone: user.phone || '',
-            provider: user.provider || 'local'
+            provider: user.provider || 'local',
+            token: customerToken
         }
     });
 });
@@ -2229,9 +2265,46 @@ app.post('/api/auth/google', async (req, res) => {
     }
 
     const { password, passwordHash, salt, otpHash, ...safeUser } = user;
-    const jwtToken = signAdminToken({ id: safeUser.id, email: safeUser.email, role: 'Customer' });
+    const customerToken = signCustomerToken(safeUser);
+    safeUser.token = customerToken;
 
-    return res.json({ success: true, user: safeUser, token: jwtToken });
+    return res.json({ success: true, user: safeUser, token: customerToken });
+});
+
+// Customer session token exchange / refresh endpoint
+app.post('/api/auth/token', async (req, res) => {
+    await ensureDbConnected();
+    const { userId, email } = req.body;
+    if (!userId && !email) {
+        return res.status(400).json({ error: 'User identifier required' });
+    }
+    let user = null;
+    if (isMongoConnected) {
+        try {
+            user = await UserModel.findOne({
+                $or: [
+                    ...(userId ? [{ id: String(userId) }] : []),
+                    ...(email ? [{ email: String(email).toLowerCase().trim() }] : [])
+                ]
+            }).lean();
+        } catch (e) {}
+    }
+    if (!user) {
+        user = mockUsers.find(u => (userId && String(u.id) === String(userId)) || (email && u.email && u.email.toLowerCase() === String(email).toLowerCase().trim()));
+    }
+    if (!user && email) {
+        user = {
+            id: userId || `user-${Date.now()}`,
+            name: req.body.name || email.split('@')[0],
+            email: String(email).toLowerCase().trim(),
+            phone: req.body.phone || ''
+        };
+    }
+    if (!user) {
+        return res.status(404).json({ error: 'User not found. Please log in.' });
+    }
+    const token = signCustomerToken(user);
+    return res.json({ success: true, token, user: { id: user.id, name: user.name, email: user.email, phone: user.phone, token } });
 });
 
 const saveOrUpdateUser = async ({ email, name, avatar_url, provider, provider_id }) => {
@@ -3208,7 +3281,7 @@ let mockCategories = [
 
 let mockCoupons = [];
 
-let mockReviews = [...seedReviews];
+let mockReviews = [];
 
 let mockStoreSettings = {
     company_name: 'Krishiv Corporation',
@@ -3441,6 +3514,101 @@ function requireSuperAdminAuth(req, res, next) {
         }
         next();
     });
+}
+
+// Cryptographically Secure Customer Token & Authentication System
+const CUSTOMER_SECRET = process.env.CUSTOMER_JWT_SECRET || process.env.SESSION_SECRET || 'krishiv-customer-auth-secret-key-2026';
+
+function signCustomerToken(userData, ttlMs = 30 * 24 * 60 * 60 * 1000) {
+    const expiresAt = Date.now() + ttlMs;
+    const payload = JSON.stringify({
+        id: String(userData.id || userData._id),
+        name: userData.name || '',
+        email: (userData.email || '').toLowerCase().trim(),
+        phone: userData.phone || '',
+        expiresAt
+    });
+    const base64Payload = Buffer.from(payload).toString('base64url');
+    const signature = crypto.createHmac('sha256', CUSTOMER_SECRET).update(base64Payload).digest('hex');
+    return `kc-cust-${base64Payload}.${signature}`;
+}
+
+function verifyCustomerToken(token) {
+    if (!token || typeof token !== 'string') return null;
+    if (!token.startsWith('kc-cust-')) return null;
+
+    const raw = token.replace('kc-cust-', '');
+    const parts = raw.split('.');
+    if (parts.length !== 2) return null;
+
+    const [base64Payload, signature] = parts;
+    const expectedSig = crypto.createHmac('sha256', CUSTOMER_SECRET).update(base64Payload).digest('hex');
+    if (signature !== expectedSig) return null;
+
+    try {
+        const payloadStr = Buffer.from(base64Payload, 'base64url').toString('utf8');
+        const payload = JSON.parse(payloadStr);
+        if (Date.now() > payload.expiresAt) return null;
+        return {
+            id: payload.id,
+            name: payload.name,
+            email: payload.email,
+            phone: payload.phone
+        };
+    } catch (e) {
+        return null;
+    }
+}
+
+async function requireCustomerAuth(req, res, next) {
+    const authHeader = req.headers['authorization'] || req.headers['x-auth-token'];
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
+
+    if (!token || typeof token !== 'string') {
+        return res.status(401).json({ error: 'Please sign in or register to submit or manage a review.' });
+    }
+
+    const verifiedUser = verifyCustomerToken(token);
+    if (!verifiedUser) {
+        return res.status(401).json({ error: 'Your session has expired or is invalid. Please sign in again.' });
+    }
+
+    req.user = verifiedUser;
+    next();
+}
+
+// Database-backed purchase validation: checks real orders for customer & product match
+async function checkVerifiedPurchase(userId, userEmail, productId) {
+    if (!isMongoConnected) return false;
+    try {
+        const numProdId = Number(productId);
+        const strProdId = String(productId);
+        const query = {
+            $or: [
+                { user_id: String(userId) },
+                { userId: String(userId) },
+                ...(userEmail ? [
+                    { customer_email: userEmail.toLowerCase() },
+                    { email: userEmail.toLowerCase() },
+                    { 'items.shipping.email': userEmail.toLowerCase() }
+                ] : [])
+            ]
+        };
+        const orders = await OrderModel.find(query).lean();
+        for (const ord of orders) {
+            const cartItems = Array.isArray(ord.items)
+                ? ord.items
+                : (ord.items?.cartItems || ord.cartItems || []);
+            const match = cartItems.some(item => {
+                const itemPId = item.id !== undefined ? item.id : (item.product_id || item.productId);
+                return Number(itemPId) === numProdId || String(itemPId) === strProdId;
+            });
+            if (match) return true;
+        }
+    } catch (e) {
+        console.error('[PURCHASE CHECK ERROR]', e.message);
+    }
+    return false;
 }
 
 // Pending Admin 2FA Verification Sessions (tempToken -> { adminData, otp, expiresAt })
@@ -4297,156 +4465,509 @@ app.delete('/api/admin/coupons/:id', requireAdminAuth, (req, res) => {
     return res.json({ success: true });
 });
 
-// Product Reviews Public Endpoints
+// ==========================================
+// CUSTOMER REVIEWS & RATINGS REST API
+// ==========================================
+
+// Helper: Format privacy-safe customer name (e.g. "Rahul S." or "Rahul")
+const formatPrivacyCustomerName = (fullName) => {
+    if (!fullName || typeof fullName !== 'string') return 'Valued Customer';
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0];
+    return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
+};
+
+// 1. Get Reviews for a Product (Public, Approved Only, with Rating Distribution & Statistics)
 app.get('/api/products/:id/reviews', async (req, res) => {
     await ensureDbConnected();
     const rawId = req.params.id;
     const numId = Number(rawId);
-    
+
+    // Optional customer token check to detect if current user owns any review
+    const authHeader = req.headers['authorization'] || req.headers['x-auth-token'];
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
+    const currentUser = token ? verifyCustomerToken(token) : null;
+    const currentUserId = currentUser ? String(currentUser.id) : null;
+
     let list = [];
     if (isMongoConnected) {
         try {
-            list = await ReviewModel.find({ 
-                product_id: numId, 
-                status: 'approved' 
+            list = await ReviewModel.find({
+                product_id: numId,
+                status: 'approved'
             }).sort({ created_at: -1 }).lean();
-        } catch (e) {}
+        } catch (e) {
+            console.error('[GET REVIEWS DB ERROR]', e.message);
+        }
     }
     if (!list || list.length === 0) {
         list = mockReviews.filter(r => (Number(r.product_id) === numId || String(r.product_id) === String(rawId)) && r.status === 'approved');
         list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     }
-    
+
     const total = list.length;
-    const average = total > 0 ? Number((list.reduce((sum, r) => sum + r.rating, 0) / total).toFixed(1)) : 4.9;
-    const breakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    const sumRatings = list.reduce((acc, r) => acc + (Number(r.rating) || 5), 0);
+    const average = total > 0 ? Number((sumRatings / total).toFixed(1)) : 0;
+
+    // Rating distribution from 5 stars to 1 star
+    const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
     list.forEach(r => {
-        const star = Math.max(1, Math.min(5, Math.floor(r.rating || 5)));
-        breakdown[star] = (breakdown[star] || 0) + 1;
+        const star = Math.max(1, Math.min(5, Math.floor(Number(r.rating) || 5)));
+        distribution[star] = (distribution[star] || 0) + 1;
     });
+
+    // Pagination
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.max(1, parseInt(req.query.limit, 10) || 20);
+    const startIndex = (page - 1) * limit;
+    const paginatedList = list.slice(startIndex, startIndex + limit);
+
+    // Map fields with privacy-safe display and own-review flag
+    const formattedReviews = paginatedList.map(r => ({
+        id: r.id,
+        product_id: r.product_id,
+        product_name: r.product_name,
+        user_id: r.user_id,
+        customer_name: formatPrivacyCustomerName(r.customer_name),
+        rating: Number(r.rating) || 5,
+        title: r.title || '',
+        review_text: r.review_text || r.comment || '',
+        verified_purchase: Boolean(r.verified_purchase),
+        helpful_count: Number(r.helpful_count) || 0,
+        created_at: r.created_at,
+        updated_at: r.updated_at || r.created_at,
+        is_own_review: currentUserId ? (String(r.user_id) === currentUserId) : false
+    }));
 
     return res.json({
         success: true,
         product_id: numId,
         total,
         average_rating: average,
-        breakdown,
+        distribution,
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit) || 1,
+        reviews: formattedReviews
+    });
+});
+
+// 2. Submit a Customer Review (Protected, Verified Customer, Purchase Validated, No Duplicates)
+app.post('/api/products/:id/reviews', requireCustomerAuth, async (req, res) => {
+    await ensureDbConnected();
+    const rawId = req.params.id;
+    const numId = Number(rawId);
+
+    // 1. Verify Product Exists
+    const dbProduct = mockProducts.find(p => Number(p.id) === numId || String(p.id) === String(rawId));
+    let productName = dbProduct ? dbProduct.name : null;
+    if (!productName && isMongoConnected) {
+        try {
+            const pObj = await ProductModel.findOne({ $or: [{ id: numId }, { _id: rawId }] }).lean();
+            if (pObj) productName = pObj.name;
+        } catch (e) {}
+    }
+    if (!productName) {
+        return res.status(404).json({ error: 'Product not found. Please review an existing product.' });
+    }
+
+    // 2. Validate Inputs
+    const { rating, title, review_text, description, comment } = req.body;
+    const rawText = (review_text || description || comment || '').trim();
+
+    const numRating = parseInt(rating, 10);
+    if (isNaN(numRating) || numRating < 1 || numRating > 5) {
+        return res.status(400).json({ error: 'Please select a valid star rating between 1 and 5.' });
+    }
+
+    if (!rawText || rawText.length < 5) {
+        return res.status(400).json({ error: 'Please provide a detailed review description (minimum 5 characters).' });
+    }
+
+    // Sanitize input against script injection
+    const cleanText = rawText.replace(/<[^>]*>?/gm, '').trim();
+    const cleanTitle = (title || '').replace(/<[^>]*>?/gm, '').trim().slice(0, 120);
+
+    const userId = String(req.user.id);
+    const customerName = (req.user.name || 'Valued Customer').trim();
+    const userEmail = (req.user.email || '').toLowerCase().trim();
+
+    // 3. Prevent Duplicate Reviews: 1 review per customer per product
+    if (isMongoConnected) {
+        try {
+            const existing = await ReviewModel.findOne({ user_id: userId, product_id: numId }).lean();
+            if (existing) {
+                return res.status(409).json({
+                    error: 'You have already reviewed this product. You can update or edit your existing review.',
+                    reviewId: existing.id
+                });
+            }
+        } catch (dbErr) {
+            console.error('[DUPLICATE REVIEW CHECK ERROR]', dbErr.message);
+        }
+    } else {
+        const existingMem = mockReviews.find(r => String(r.user_id) === userId && Number(r.product_id) === numId);
+        if (existingMem) {
+            return res.status(409).json({
+                error: 'You have already reviewed this product. You can update or edit your existing review.',
+                reviewId: existingMem.id
+            });
+        }
+    }
+
+    // 4. Validate Verified Purchase against actual order history in database
+    const isVerifiedPurchase = await checkVerifiedPurchase(userId, userEmail, numId);
+
+    const reviewId = `rev-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+    const newReview = {
+        id: reviewId,
+        product_id: numId,
+        product_name: productName,
+        user_id: userId,
+        customer_name: customerName,
+        rating: numRating,
+        title: cleanTitle,
+        review_text: cleanText,
+        comment: cleanText,
+        verified_purchase: isVerifiedPurchase,
+        status: 'approved',
+        helpful_count: 0,
+        helpful_voters: [],
+        created_at: new Date(),
+        updated_at: new Date()
+    };
+
+    if (isMongoConnected) {
+        try {
+            await ReviewModel.create(newReview);
+        } catch (cErr) {
+            if (cErr.code === 11000) {
+                return res.status(409).json({ error: 'You have already reviewed this product.' });
+            }
+            console.error('[REVIEW CREATION ERROR]', cErr.message);
+            return res.status(500).json({ error: 'Failed to save review in database. Please try again.' });
+        }
+    }
+    mockReviews.unshift(newReview);
+
+    // 5. Immediately sync product average rating and count
+    await syncProductRatings(numId);
+
+    return res.status(201).json({
+        success: true,
+        message: 'Your review has been submitted successfully!',
+        review: {
+            ...newReview,
+            customer_name: formatPrivacyCustomerName(customerName),
+            is_own_review: true
+        }
+    });
+});
+
+// 3. Update Existing Customer Review (Protected, Author Ownership Enforced)
+app.put('/api/reviews/:id', requireCustomerAuth, async (req, res) => {
+    await ensureDbConnected();
+    const reviewId = req.params.id;
+    const userId = String(req.user.id);
+
+    let review = null;
+    if (isMongoConnected) {
+        try {
+            review = await ReviewModel.findOne({ id: reviewId });
+        } catch (e) {}
+    }
+    if (!review) {
+        const memIdx = mockReviews.findIndex(r => r.id === reviewId);
+        if (memIdx !== -1) review = mockReviews[memIdx];
+    }
+
+    if (!review) {
+        return res.status(404).json({ error: 'Review not found.' });
+    }
+
+    // Ownership check: Customer can only edit their own review
+    if (String(review.user_id) !== userId) {
+        return res.status(403).json({ error: 'Forbidden: You can only edit your own review.' });
+    }
+
+    const { rating, title, review_text, description, comment } = req.body;
+    const rawText = (review_text || description || comment || '').trim();
+
+    if (rating !== undefined) {
+        const numRating = parseInt(rating, 10);
+        if (isNaN(numRating) || numRating < 1 || numRating > 5) {
+            return res.status(400).json({ error: 'Please select a valid star rating between 1 and 5.' });
+        }
+        review.rating = numRating;
+    }
+
+    if (rawText) {
+        if (rawText.length < 5) {
+            return res.status(400).json({ error: 'Review description must be at least 5 characters.' });
+        }
+        const clean = rawText.replace(/<[^>]*>?/gm, '').trim();
+        review.review_text = clean;
+        review.comment = clean;
+    }
+
+    if (title !== undefined) {
+        review.title = (title || '').replace(/<[^>]*>?/gm, '').trim().slice(0, 120);
+    }
+
+    review.updated_at = new Date();
+
+    if (isMongoConnected && typeof review.save === 'function') {
+        await review.save();
+    }
+    const memIdx = mockReviews.findIndex(r => r.id === reviewId);
+    if (memIdx !== -1) {
+        mockReviews[memIdx] = { ...mockReviews[memIdx], ...review.toObject ? review.toObject() : review };
+    }
+
+    await syncProductRatings(review.product_id);
+
+    return res.json({
+        success: true,
+        message: 'Review updated successfully!',
+        review: {
+            id: review.id,
+            product_id: review.product_id,
+            rating: review.rating,
+            title: review.title,
+            review_text: review.review_text || review.comment,
+            verified_purchase: review.verified_purchase,
+            updated_at: review.updated_at
+        }
+    });
+});
+
+// 4. Delete Customer Review (Protected: Author Customer OR Admin)
+app.delete('/api/reviews/:id', async (req, res) => {
+    await ensureDbConnected();
+    const reviewId = req.params.id;
+
+    // Check if admin token
+    const authHeader = req.headers['authorization'] || req.headers['x-admin-token'] || req.headers['x-auth-token'];
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
+
+    const admin = token ? verifyAdminToken(token) : null;
+    const customer = token ? verifyCustomerToken(token) : null;
+
+    if (!admin && !customer) {
+        return res.status(401).json({ error: 'Authentication required to delete a review.' });
+    }
+
+    let review = null;
+    if (isMongoConnected) {
+        try {
+            review = await ReviewModel.findOne({ id: reviewId });
+        } catch (e) {}
+    }
+    if (!review) {
+        review = mockReviews.find(r => r.id === reviewId);
+    }
+
+    if (!review) {
+        return res.status(404).json({ error: 'Review not found.' });
+    }
+
+    // Permission check: Admin can delete any review, customer can only delete their own review
+    if (!admin && String(review.user_id) !== String(customer.id)) {
+        return res.status(403).json({ error: 'Forbidden: You can only delete your own review.' });
+    }
+
+    const prodId = review.product_id;
+
+    if (isMongoConnected) {
+        try {
+            await ReviewModel.deleteOne({ id: reviewId });
+        } catch (e) {}
+    }
+    mockReviews = mockReviews.filter(r => r.id !== reviewId);
+
+    await syncProductRatings(prodId);
+
+    return res.json({ success: true, message: 'Review deleted successfully.' });
+});
+
+// 5. Helpful Vote (Prevents repeated votes by the same customer)
+app.post('/api/reviews/:id/helpful', async (req, res) => {
+    await ensureDbConnected();
+    const reviewId = req.params.id;
+
+    const authHeader = req.headers['authorization'] || req.headers['x-auth-token'];
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
+    const customer = token ? verifyCustomerToken(token) : null;
+
+    const clientIp = req.headers['x-forwarded-for'] || req.ip || '127.0.0.1';
+    const voterKey = customer ? `user_${customer.id}` : `ip_${clientIp}`;
+
+    let review = null;
+    if (isMongoConnected) {
+        try {
+            review = await ReviewModel.findOne({ id: reviewId });
+        } catch (e) {}
+    }
+    if (!review) {
+        review = mockReviews.find(r => r.id === reviewId);
+    }
+
+    if (!review) {
+        return res.status(404).json({ error: 'Review not found.' });
+    }
+
+    const voters = Array.isArray(review.helpful_voters) ? review.helpful_voters : [];
+    if (voters.includes(voterKey)) {
+        return res.status(400).json({ error: 'You have already marked this review as helpful.' });
+    }
+
+    voters.push(voterKey);
+    const newCount = (Number(review.helpful_count) || 0) + 1;
+
+    if (isMongoConnected) {
+        try {
+            await ReviewModel.updateOne(
+                { id: reviewId },
+                { $set: { helpful_count: newCount }, $push: { helpful_voters: voterKey } }
+            );
+        } catch (e) {}
+    }
+    const memIdx = mockReviews.findIndex(r => r.id === reviewId);
+    if (memIdx !== -1) {
+        mockReviews[memIdx].helpful_count = newCount;
+        mockReviews[memIdx].helpful_voters = voters;
+    }
+
+    return res.json({ success: true, helpful_count: newCount });
+});
+
+// 6. Admin Reviews Moderation Suite (Protected with requireAdminAuth)
+app.get('/api/admin/reviews', requireAdminAuth, async (req, res) => {
+    await ensureDbConnected();
+
+    const { product_id, status, rating, search } = req.query;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.max(1, parseInt(req.query.limit, 10) || 15);
+
+    let query = {};
+    if (product_id && product_id !== 'all') {
+        query.product_id = Number(product_id);
+    }
+    if (status && status !== 'all') {
+        query.status = status;
+    }
+    if (rating && rating !== 'all') {
+        query.rating = Number(rating);
+    }
+    if (search && search.trim()) {
+        const qRegex = new RegExp(search.trim(), 'i');
+        query.$or = [
+            { customer_name: qRegex },
+            { title: qRegex },
+            { review_text: qRegex },
+            { comment: qRegex },
+            { product_name: qRegex }
+        ];
+    }
+
+    let total = 0;
+    let list = [];
+
+    if (isMongoConnected) {
+        try {
+            total = await ReviewModel.countDocuments(query);
+            list = await ReviewModel.find(query)
+                .sort({ created_at: -1 })
+                .skip((page - 1) * limit)
+                .limit(limit)
+                .lean();
+        } catch (e) {
+            console.error('[ADMIN REVIEWS DB ERROR]', e.message);
+        }
+    } else {
+        let memFiltered = [...mockReviews];
+        if (query.product_id) memFiltered = memFiltered.filter(r => Number(r.product_id) === query.product_id);
+        if (query.status) memFiltered = memFiltered.filter(r => r.status === query.status);
+        if (query.rating) memFiltered = memFiltered.filter(r => Math.floor(r.rating) === query.rating);
+        if (search && search.trim()) {
+            const s = search.toLowerCase();
+            memFiltered = memFiltered.filter(r => 
+                (r.customer_name || '').toLowerCase().includes(s) ||
+                (r.comment || '').toLowerCase().includes(s) ||
+                (r.title || '').toLowerCase().includes(s)
+            );
+        }
+        total = memFiltered.length;
+        list = memFiltered.slice((page - 1) * limit, page * limit);
+    }
+
+    return res.json({
+        success: true,
+        total,
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit) || 1,
         reviews: list
     });
 });
 
-app.post('/api/products/:id/reviews', async (req, res) => {
-    await ensureDbConnected();
-    const rawId = req.params.id;
-    const numId = Number(rawId);
-    const { customer_name, rating, title, comment, location } = req.body;
-    
-    if (!customer_name || !comment) {
-        return res.status(400).json({ error: 'Customer name and review comment are required' });
-    }
-    
-    const dbProduct = mockProducts.find(p => p.id === numId) || {};
-    const newReview = {
-        id: `rev-user-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        product_id: numId,
-        product_name: dbProduct.name || `Product #${numId}`,
-        customer_name: customer_name.trim(),
-        rating: Math.max(1, Math.min(5, Number(rating) || 5)),
-        title: (title || 'Great Ayurvedic product!').trim(),
-        comment: comment.trim(),
-        location: (location || 'Verified Buyer, India').trim(),
-        verified_purchase: true,
-        status: 'approved',
-        helpful_count: 0,
-        created_at: new Date().toISOString()
-    };
-    
-    mockReviews.unshift(newReview);
-    if (isMongoConnected) {
-        try {
-            await ReviewModel.create(newReview);
-            const allPRevs = await ReviewModel.find({ product_id: numId, status: 'approved' }).lean();
-            const newCount = allPRevs.length;
-            const newAvg = Number((allPRevs.reduce((sum, r) => sum + r.rating, 0) / newCount).toFixed(1));
-            await ProductModel.updateOne({ id: numId }, { $set: { review_count: newCount, rating: newAvg } });
-            if (dbProduct) {
-                dbProduct.review_count = newCount;
-                dbProduct.rating = newAvg;
-            }
-        } catch (e) {
-            console.error('[REVIEW SUBMIT DB ERROR]', e.message);
-        }
-    }
-    
-    return res.status(201).json({ success: true, message: 'Review submitted successfully!', review: newReview });
-});
-
-app.post('/api/reviews/:id/helpful', async (req, res) => {
-    await ensureDbConnected();
-    const revId = req.params.id;
-    const idx = mockReviews.findIndex(r => r.id === revId);
-    if (idx !== -1) {
-        mockReviews[idx].helpful_count = (mockReviews[idx].helpful_count || 0) + 1;
-    }
-    if (isMongoConnected) {
-        try {
-            await ReviewModel.updateOne({ id: revId }, { $inc: { helpful_count: 1 } });
-        } catch (e) {}
-    }
-    return res.json({ success: true });
-});
-
-app.get('/api/reviews/featured', async (req, res) => {
-    await ensureDbConnected();
-    let list = [];
-    if (isMongoConnected) {
-        try {
-            list = await ReviewModel.find({ status: 'approved', rating: 5 }).sort({ helpful_count: -1 }).limit(12).lean();
-        } catch (e) {}
-    }
-    if (!list || list.length === 0) {
-        list = mockReviews.filter(r => r.rating === 5).sort((a, b) => (b.helpful_count || 0) - (a.helpful_count || 0)).slice(0, 12);
-    }
-    return res.json({ success: true, reviews: list });
-});
-
-// Admin Reviews (Protected with requireAdminAuth)
-app.get('/api/admin/reviews', requireAdminAuth, async (req, res) => {
-    await ensureDbConnected();
-    let list = [];
-    if (isMongoConnected) {
-        try {
-            list = await ReviewModel.find().sort({ created_at: -1 }).lean();
-        } catch (e) {}
-    }
-    if (!list || list.length === 0) {
-        list = [...mockReviews];
-        list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    }
-    return res.json({ success: true, reviews: list });
-});
-
 app.put('/api/admin/reviews/:id', requireAdminAuth, async (req, res) => {
     await ensureDbConnected();
-    const index = mockReviews.findIndex(r => r.id === req.params.id);
-    if (index !== -1) mockReviews[index] = { ...mockReviews[index], ...req.body };
+    const reviewId = req.params.id;
+    const { status } = req.body;
+
+    if (!['approved', 'rejected', 'pending'].includes(status)) {
+        return res.status(400).json({ error: 'Invalid moderation status. Must be approved, rejected, or pending.' });
+    }
+
+    let review = null;
     if (isMongoConnected) {
         try {
-            await ReviewModel.updateOne({ id: req.params.id }, { $set: req.body });
+            review = await ReviewModel.findOneAndUpdate(
+                { id: reviewId },
+                { $set: { status, updated_at: new Date() } },
+                { new: true }
+            ).lean();
         } catch (e) {}
     }
-    return res.json({ success: true, review: index !== -1 ? mockReviews[index] : req.body });
+    const memIdx = mockReviews.findIndex(r => r.id === reviewId);
+    if (memIdx !== -1) {
+        mockReviews[memIdx].status = status;
+        if (!review) review = mockReviews[memIdx];
+    }
+
+    if (!review) {
+        return res.status(404).json({ error: 'Review not found.' });
+    }
+
+    await syncProductRatings(review.product_id);
+
+    return res.json({ success: true, message: `Review status updated to ${status}.`, review });
 });
 
 app.delete('/api/admin/reviews/:id', requireAdminAuth, async (req, res) => {
     await ensureDbConnected();
-    mockReviews = mockReviews.filter(r => r.id !== req.params.id);
+    const reviewId = req.params.id;
+
+    let prodId = null;
     if (isMongoConnected) {
         try {
-            await ReviewModel.deleteOne({ id: req.params.id });
+            const r = await ReviewModel.findOne({ id: reviewId }).lean();
+            if (r) prodId = r.product_id;
+            await ReviewModel.deleteOne({ id: reviewId });
         } catch (e) {}
     }
-    return res.json({ success: true });
+    const memIdx = mockReviews.findIndex(r => r.id === reviewId);
+    if (memIdx !== -1) {
+        if (!prodId) prodId = mockReviews[memIdx].product_id;
+        mockReviews.splice(memIdx, 1);
+    }
+
+    if (prodId !== null) {
+        await syncProductRatings(prodId);
+    }
+
+    return res.json({ success: true, message: 'Review deleted by administrator.' });
 });
 
 // Admin Activity Audit Logs (Protected with requireAdminAuth)

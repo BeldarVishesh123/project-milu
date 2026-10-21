@@ -756,14 +756,8 @@ export default function App() {
           const stock_qty = p.stock !== undefined ? Number(p.stock) : (p.stock_qty !== undefined ? Number(p.stock_qty) : 10);
           const stock_status = stock_qty === 0 ? 'Out of Stock' : (stock_qty <= 5 ? 'Limited Stock' : 'In Stock');
           
-          const defaultReviews = (
-            p.name?.includes('Orange') ? 82 :
-            p.name?.includes('Neem') ? 74 :
-            p.name?.includes('Multani') ? 91 :
-            p.name?.includes('Rice') ? 68 :
-            p.name?.includes('Ubtan') ? 88 :
-            p.name?.includes('Chocolate') ? 76 : 80
-          );
+          const realReviewCount = Number(p.review_count) || 0;
+          const realRating = Number(p.rating) || 0;
           
           return {
             ...p,
@@ -772,8 +766,8 @@ export default function App() {
             stock_qty: stock_qty,
             original_price: Math.round(origPrice),
             discount_pct: p.discount_pct !== undefined ? p.discount_pct : calcDiscount,
-            rating: p.rating || 4.9,
-            review_count: p.review_count || defaultReviews,
+            rating: realRating,
+            review_count: realReviewCount,
             stock_status: stock_status,
             is_new: p.is_new !== undefined ? p.is_new : true
           };
@@ -1110,6 +1104,7 @@ export default function App() {
       if (res.ok && data.success) {
         setUser(data.user);
         localStorage.setItem('user', JSON.stringify(data.user));
+        if (data.token || data.user?.token) localStorage.setItem('krishiv_auth_token', data.token || data.user?.token);
         showToast('Account registered and verified successfully!');
         if (redirectAfterLogin) {
           setPage(redirectAfterLogin);
@@ -1191,6 +1186,7 @@ export default function App() {
       if (res.ok && data.user) {
         setUser(data.user);
         localStorage.setItem('user', JSON.stringify(data.user));
+        if (data.token || data.user?.token) localStorage.setItem('krishiv_auth_token', data.token || data.user?.token);
         showToast(`Welcome back, ${data.user.name || 'valued customer'}!`);
         if (redirectAfterLogin) {
           setPage(redirectAfterLogin);
@@ -2306,125 +2302,6 @@ export default function App() {
                 <span>Traditional Methods</span>
               </div>
             </div>
-
-            {/* Real Customer Reviews Showcase */}
-            <div style={{ marginTop: '48px', width: '100%', maxWidth: '980px', margin: '48px auto 0' }}>
-              <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-                <span style={{ fontSize: '11px', fontWeight: '800', letterSpacing: '1.5px', textTransform: 'uppercase', color: '#8f8269', background: 'rgba(143, 130, 105, 0.1)', padding: '4px 12px', borderRadius: '14px', display: 'inline-block', marginBottom: '8px' }}>
-                  ★ 4.9 RATED BY 10,000+ CUSTOMERS ★
-                </span>
-                <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'var(--ink, #1e293b)', margin: '0 0 6px' }}>
-                  Loved by Ayurvedic Enthusiasts Across India
-                </h2>
-                <p style={{ fontSize: '13.5px', color: 'var(--ink-soft, #64748b)', margin: 0 }}>
-                  Read verified testimonials for our 100% pure, sun-dried, chemical-free personal care powders
-                </p>
-              </div>
-
-              {/* Grid of 6 Featured Reviews (1 per product) */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-                {[
-                  {
-                    prodId: 1,
-                    product: 'Orange Peel Powder',
-                    rating: 5,
-                    name: 'Priya Patel',
-                    city: 'Surat, Gujarat',
-                    quote: 'The glow it leaves on my face is instant and natural! Faded my stubborn sun tan in just 2 applications.',
-                    badge: '82 Verified Reviews'
-                  },
-                  {
-                    prodId: 2,
-                    product: 'Neem Leaf Powder',
-                    rating: 5,
-                    name: 'Ananya Sharma',
-                    city: 'Mumbai, Maharashtra',
-                    quote: 'Pure bitter neem aroma and zero chemicals. Cleared my hormonal acne breakouts within 10 days!',
-                    badge: '74 Verified Reviews'
-                  },
-                  {
-                    prodId: 3,
-                    product: 'Multani Mitti Clay',
-                    rating: 5,
-                    name: 'Sneha Joshi',
-                    city: 'Ahmedabad, Gujarat',
-                    quote: 'Silky smooth clay with zero sand grit. Shrinks pores and cools down summer heat immediately.',
-                    badge: '91 Verified Reviews'
-                  },
-                  {
-                    prodId: 4,
-                    product: 'Rice Powder',
-                    rating: 5,
-                    name: 'Kavita Mehta',
-                    city: 'Pune, Maharashtra',
-                    quote: 'Gives that luminous Korean glass-skin finish! Ultra-fine gentle scrub that leaves skin baby-soft.',
-                    badge: '68 Verified Reviews'
-                  },
-                  {
-                    prodId: 5,
-                    product: 'Ubtan Powder',
-                    rating: 5,
-                    name: 'Pooja Verma',
-                    city: 'Delhi, NCR',
-                    quote: 'Heavenly sandalwood and turmeric aroma. Gave me the most radiant bridal glow without any yellow stains.',
-                    badge: '88 Verified Reviews'
-                  },
-                  {
-                    prodId: 6,
-                    product: 'Chocolate Wax Powder',
-                    rating: 5,
-                    name: 'Ritu Desai',
-                    city: 'Bangalore, Karnataka',
-                    quote: 'Completely PAINLESS hair removal at home! Smells like rich cocoa and wipes clean in 10 minutes.',
-                    badge: '76 Verified Reviews'
-                  }
-                ].map((item, idx) => {
-                  const targetProd = products.find(p => p.id === item.prodId) || { id: item.prodId, name: item.product, image_url: `/images/${item.product.toLowerCase().replace(/ /g, '_')}.png` };
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => changePage('product-details', { product: targetProd })}
-                      style={{
-                        background: '#ffffff',
-                        border: '1px solid rgba(143, 130, 105, 0.2)',
-                        borderRadius: '16px',
-                        padding: '18px',
-                        cursor: 'pointer',
-                        transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                        boxShadow: '0 4px 14px rgba(0,0,0,0.04)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between'
-                      }}
-                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(143, 130, 105, 0.15)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,0.04)'; }}
-                    >
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                          <span style={{ fontSize: '11px', fontWeight: '800', color: '#8f8269', background: '#faf8f5', padding: '2px 8px', borderRadius: '8px', border: '1px solid #eadecb' }}>
-                            {item.product}
-                          </span>
-                          <span style={{ color: '#f59e0b', fontSize: '13px' }}>{'★'.repeat(item.rating)}</span>
-                        </div>
-                        <p style={{ fontSize: '12.5px', color: '#334155', fontStyle: 'italic', lineHeight: '1.6', margin: '0 0 12px' }}>
-                          "{item.quote}"
-                        </p>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
-                        <div>
-                          <div style={{ fontSize: '12px', fontWeight: '800', color: '#0f172a' }}>{item.name}</div>
-                          <div style={{ fontSize: '10.5px', color: '#94a3b8' }}>{item.city} • Verified Buyer</div>
-                        </div>
-                        <span style={{ fontSize: '11px', color: '#8f8269', fontWeight: '700' }}>
-                          {item.badge} →
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
           </div>
         )}
 
@@ -2505,20 +2382,28 @@ export default function App() {
                               className="rating-row" 
                               style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }} 
                               onClick={() => changePage('product-details', { product: p })}
-                              title="Click to view verified customer reviews"
+                              title={p.review_count > 0 ? "Click to view verified customer reviews" : "No reviews yet. Be the first to review!"}
                             >
-                              <span className="stars" style={{ color: '#f59e0b', letterSpacing: '1px' }}>
-                                {(() => {
-                                  const starCount = Math.max(0, Math.min(5, Math.floor(Number(p.rating) || 5)));
-                                  return '★'.repeat(starCount) + '☆'.repeat(5 - starCount);
-                                })()}
-                              </span>
-                              <span style={{ fontWeight: '800', fontSize: '12px', color: '#1e293b' }}>
-                                {p.rating ? Number(p.rating).toFixed(1) : '4.9'}
-                              </span>
-                              <span className="reviews" style={{ color: '#8f8269', fontWeight: '700', fontSize: '11.5px', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
-                                ({p.review_count || 80} reviews)
-                              </span>
+                              {p.review_count > 0 ? (
+                                <>
+                                  <span className="stars" style={{ color: '#f59e0b', letterSpacing: '1px' }}>
+                                    {(() => {
+                                      const starCount = Math.max(0, Math.min(5, Math.round(Number(p.rating) || 0)));
+                                      return '★'.repeat(starCount) + '☆'.repeat(5 - starCount);
+                                    })()}
+                                  </span>
+                                  <span style={{ fontWeight: '800', fontSize: '12px', color: '#1e293b' }}>
+                                    {Number(p.rating).toFixed(1)}
+                                  </span>
+                                  <span className="reviews" style={{ color: '#8f8269', fontWeight: '700', fontSize: '11.5px', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
+                                    ({p.review_count} {p.review_count === 1 ? 'review' : 'reviews'})
+                                  </span>
+                                </>
+                              ) : (
+                                <span style={{ color: '#64748b', fontSize: '12px', fontWeight: '600' }}>
+                                  No reviews yet
+                                </span>
+                              )}
                             </div>
 
                             {/* Description */}
@@ -4652,13 +4537,21 @@ export default function App() {
 
               {/* Rating and review count badge */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#f59e0b', fontSize: '14px', fontWeight: '800' }}>
-                  <span>★</span>
-                  <span style={{ color: '#1e293b' }}>{selectedProduct.rating || 4.9}</span>
-                </div>
-                <span style={{ color: '#64748b', fontSize: '12px', fontWeight: '600' }}>
-                  ({selectedProduct.review_count || 82} Verified Reviews)
-                </span>
+                {selectedProduct.review_count > 0 ? (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#f59e0b', fontSize: '14px', fontWeight: '800' }}>
+                      <span>★</span>
+                      <span style={{ color: '#1e293b' }}>{Number(selectedProduct.rating).toFixed(1)}</span>
+                    </div>
+                    <span style={{ color: '#64748b', fontSize: '12px', fontWeight: '600' }}>
+                      ({selectedProduct.review_count} Verified {selectedProduct.review_count === 1 ? 'Review' : 'Reviews'})
+                    </span>
+                  </>
+                ) : (
+                  <span style={{ color: '#64748b', fontSize: '12px', fontWeight: '600' }}>
+                    No reviews yet
+                  </span>
+                )}
                 <span style={{ color: '#166534', background: '#dcfce7', fontSize: '10.5px', fontWeight: '800', padding: '2px 8px', borderRadius: '10px' }}>
                   ✓ 100% Organic &amp; Certified
                 </span>
@@ -4693,12 +4586,20 @@ export default function App() {
                 <ProductReviews
                   productId={selectedProduct.id}
                   productName={selectedProduct.name}
-                  initialReviewCount={selectedProduct.review_count || 82}
-                  initialRating={selectedProduct.rating || 4.9}
                   user={user}
                   apiBaseUrl={API_BASE_URL}
-                  onReviewAdded={(newRev) => {
-                    setProducts(prev => prev.map(p => p.id === selectedProduct.id ? { ...p, review_count: (p.review_count || 82) + 1 } : p));
+                  onRequireLogin={() => {
+                    setRedirectAfterLogin('product-details');
+                    changePage('auth');
+                  }}
+                  onReviewChanged={({ total, average }) => {
+                    setProducts(prev => prev.map(p => {
+                      if (String(p.id) === String(selectedProduct.id)) {
+                        return { ...p, rating: average, review_count: total };
+                      }
+                      return p;
+                    }));
+                    setSelectedProduct(prev => prev ? { ...prev, rating: average, review_count: total } : null);
                   }}
                 />
               </div>

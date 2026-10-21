@@ -1,166 +1,329 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Star, ThumbsUp, CheckCircle2, MessageSquare, Plus, X, ChevronDown, User, Sparkles } from 'lucide-react';
-import fallbackReviews from '../data/seedReviews.json';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { 
+  Star, 
+  ThumbsUp, 
+  CheckCircle2, 
+  MessageSquare, 
+  Plus, 
+  X, 
+  ChevronDown, 
+  User, 
+  ShieldCheck, 
+  Edit3, 
+  Trash2, 
+  AlertCircle, 
+  LogIn 
+} from 'lucide-react';
 
 export default function ProductReviews({ 
   productId, 
   productName, 
-  initialReviewCount = 82, 
-  initialRating = 4.9, 
   user = null,
   apiBaseUrl = '/api',
-  onReviewAdded = null
+  onRequireLogin = null,
+  onReviewChanged = null
 }) {
   const numId = Number(productId) || 1;
 
-  // Local fallback dataset for this product
-  const defaultProductReviews = useMemo(() => {
-    return fallbackReviews.filter(r => Number(r.product_id) === numId || String(r.product_id) === String(productId));
-  }, [numId, productId]);
-
-  const [reviews, setReviews] = useState(defaultProductReviews);
-  const [loading, setLoading] = useState(false);
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [filterRating, setFilterRating] = useState('all');
   const [visibleCount, setVisibleCount] = useState(6);
   const [showWriteForm, setShowWriteForm] = useState(false);
+  const [showGuestPrompt, setShowGuestPrompt] = useState(false);
   const [helpfulVoted, setHelpfulVoted] = useState(new Set());
 
-  // Form State
+  // Form State for New Review
   const [formData, setFormData] = useState({
-    customer_name: user?.name || '',
     rating: 5,
     title: '',
-    comment: '',
-    location: user?.city ? `${user.city}, India` : 'Verified Buyer, India'
+    review_text: ''
   });
+  const [hoverRating, setHoverRating] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  const [formSuccess, setFormSuccess] = useState(false);
+  const [formSuccess, setFormSuccess] = useState('');
   const [formError, setFormError] = useState('');
 
-  // Fetch reviews from backend API on mount or productId change
-  useEffect(() => {
-    let isMounted = true;
-    const fetchReviews = async () => {
-      setLoading(true);
+  // Editing State for Own Review
+  const [editingReview, setEditingReview] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    rating: 5,
+    title: '',
+    review_text: ''
+  });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [deletingId, setDeletingId] = useState(null);
+
+  // Helper to get fresh/stored customer token
+  const getCustomerToken = useCallback(async () => {
+    if (user?.token) return user.token;
+    const stored = localStorage.getItem('krishiv_auth_token');
+    if (stored) return stored;
+
+    // If user is logged in in state or localStorage without token, get one from backend
+    const savedUserStr = localStorage.getItem('user');
+    const u = user || (savedUserStr ? JSON.parse(savedUserStr) : null);
+    if (u && (u.id || u.email)) {
       try {
-        const res = await fetch(`${apiBaseUrl}/products/${numId}/reviews`);
+        const res = await fetch(`${apiBaseUrl}/auth/token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: u.id, email: u.email })
+        });
         if (res.ok) {
           const data = await res.json();
-          if (isMounted && data.success && Array.isArray(data.reviews) && data.reviews.length > 0) {
-            setReviews(data.reviews);
+          if (data.token) {
+            localStorage.setItem('krishiv_auth_token', data.token);
+            return data.token;
           }
         }
-      } catch (err) {
-        console.warn('Could not fetch reviews from server, using local fallback:', err.message);
-      } finally {
-        if (isMounted) setLoading(false);
+      } catch (e) {
+        console.warn('Could not retrieve customer token:', e.message);
       }
-    };
-    fetchReviews();
-    return () => { isMounted = false; };
-  }, [numId, apiBaseUrl]);
+    }
+    return null;
+  }, [user, apiBaseUrl]);
 
-  // Aggregate Stats
+  // Fetch real reviews from backend API on mount or productId change
+  const fetchReviews = useCallback(async () => {
+    setLoading(true);
+    try {
+      const token = await getCustomerToken();
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${apiBaseUrl}/products/${numId}/reviews?limit=100`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.reviews)) {
+          setReviews(data.reviews);
+          if (onReviewChanged) {
+            onReviewChanged({
+              total: data.total || data.reviews.length,
+              average: data.average_rating || 0
+            });
+          }
+        } else {
+          setReviews([]);
+        }
+      } else {
+        setReviews([]);
+      }
+    } catch (err) {
+      console.warn('Could not fetch reviews from server:', err.message);
+      setReviews([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [numId, apiBaseUrl, getCustomerToken, onReviewChanged]);
+
+  useEffect(() => {
+    fetchReviews();
+  }, [fetchReviews]);
+
+  // Dynamic Real Aggregates
   const stats = useMemo(() => {
     const total = reviews.length;
     if (total === 0) {
       return {
-        total: initialReviewCount,
-        average: initialRating,
-        breakdown: { 5: Math.round(initialReviewCount * 0.9), 4: Math.round(initialReviewCount * 0.1), 3: 0, 2: 0, 1: 0 }
+        total: 0,
+        average: 0,
+        breakdown: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
       };
     }
     const sum = reviews.reduce((acc, r) => acc + (Number(r.rating) || 5), 0);
     const avg = Number((sum / total).toFixed(1));
     const breakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
     reviews.forEach(r => {
-      const star = Math.max(1, Math.min(5, Math.floor(r.rating || 5)));
+      const star = Math.max(1, Math.min(5, Math.floor(Number(r.rating) || 5)));
       breakdown[star] = (breakdown[star] || 0) + 1;
     });
     return { total, average: avg, breakdown };
-  }, [reviews, initialReviewCount, initialRating]);
+  }, [reviews]);
+
+  // Check if current user has already submitted a review
+  const userExistingReview = useMemo(() => {
+    if (!user && !localStorage.getItem('user')) return null;
+    const currentId = user?.id || (() => {
+      try {
+        const saved = localStorage.getItem('user');
+        return saved ? JSON.parse(saved)?.id : null;
+      } catch (e) {
+        return null;
+      }
+    })();
+    if (!currentId) return null;
+    return reviews.find(r => r.is_own_review || String(r.user_id) === String(currentId));
+  }, [reviews, user]);
 
   // Filtered reviews
   const filteredReviews = useMemo(() => {
     if (filterRating === 'all') return reviews;
-    return reviews.filter(r => Math.floor(r.rating) === Number(filterRating));
+    return reviews.filter(r => Math.floor(Number(r.rating)) === Number(filterRating));
   }, [reviews, filterRating]);
+
+  // Handle clicking "Write a Review" button
+  const handleWriteClick = () => {
+    const isAuthed = Boolean(user?.token || localStorage.getItem('krishiv_auth_token') || localStorage.getItem('user'));
+    if (!isAuthed) {
+      setShowGuestPrompt(true);
+      setShowWriteForm(false);
+      return;
+    }
+    if (userExistingReview) {
+      // Prompt user to edit their existing review
+      handleStartEdit(userExistingReview);
+      return;
+    }
+    setShowGuestPrompt(false);
+    setShowWriteForm(prev => !prev);
+    setFormError('');
+    setFormSuccess('');
+  };
 
   // Submit new review
   const handleSubmitReview = async (e) => {
     e.preventDefault();
-    if (!formData.customer_name.trim() || !formData.comment.trim()) {
-      setFormError('Please enter your name and a review comment.');
+    setFormError('');
+    setFormSuccess('');
+
+    if (!formData.review_text.trim() || formData.review_text.trim().length < 5) {
+      setFormError('Please enter a detailed review description (minimum 5 characters).');
       return;
     }
+
     setSubmitting(true);
-    setFormError('');
     try {
+      const token = await getCustomerToken();
+      if (!token) {
+        setFormError('Authentication required. Please sign in to submit a review.');
+        setShowGuestPrompt(true);
+        setSubmitting(false);
+        return;
+      }
+
       const payload = {
-        customer_name: formData.customer_name.trim(),
         rating: formData.rating,
-        title: formData.title.trim() || 'Wonderful Ayurvedic Experience',
-        comment: formData.comment.trim(),
-        location: formData.location.trim() || 'Verified Buyer, India'
+        title: formData.title.trim(),
+        review_text: formData.review_text.trim(),
+        description: formData.review_text.trim()
       };
 
       const res = await fetch(`${apiBaseUrl}/products/${numId}/reviews`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload)
       });
 
       const data = await res.json();
       if (res.ok && data.success) {
-        const addedReview = data.review || {
-          id: `rev-${Date.now()}`,
-          product_id: numId,
-          product_name: productName,
-          ...payload,
-          verified_purchase: true,
-          helpful_count: 0,
-          created_at: new Date().toISOString()
-        };
-        setReviews(prev => [addedReview, ...prev]);
-        setFormSuccess(true);
-        if (onReviewAdded) onReviewAdded(addedReview);
+        setFormSuccess('Thank you! Your verified review has been published successfully.');
+        setFormData({ rating: 5, title: '', review_text: '' });
+        await fetchReviews();
         setTimeout(() => {
           setShowWriteForm(false);
-          setFormSuccess(false);
-          setFormData({
-            customer_name: user?.name || '',
-            rating: 5,
-            title: '',
-            comment: '',
-            location: 'Verified Buyer, India'
-          });
-        }, 2000);
+          setFormSuccess('');
+        }, 2200);
       } else {
         setFormError(data.error || 'Failed to submit review. Please try again.');
       }
     } catch (err) {
-      // Offline fallback: add to local state
-      const localReview = {
-        id: `rev-local-${Date.now()}`,
-        product_id: numId,
-        product_name: productName,
-        customer_name: formData.customer_name.trim(),
-        rating: formData.rating,
-        title: formData.title.trim() || 'Wonderful Ayurvedic Experience',
-        comment: formData.comment.trim(),
-        location: formData.location.trim() || 'Verified Buyer, India',
-        verified_purchase: true,
-        helpful_count: 0,
-        created_at: new Date().toISOString()
-      };
-      setReviews(prev => [localReview, ...prev]);
-      setFormSuccess(true);
-      setTimeout(() => {
-        setShowWriteForm(false);
-        setFormSuccess(false);
-      }, 1500);
+      console.error('Error submitting review:', err);
+      setFormError('Network connection error. Please try again.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Edit Review Handlers
+  const handleStartEdit = (rev) => {
+    setEditingReview(rev);
+    setEditFormData({
+      rating: rev.rating || 5,
+      title: rev.title || '',
+      review_text: rev.review_text || rev.comment || ''
+    });
+    setEditError('');
+    setShowWriteForm(false);
+  };
+
+  const handleUpdateReview = async (e) => {
+    e.preventDefault();
+    if (!editingReview) return;
+    setEditError('');
+
+    if (!editFormData.review_text.trim() || editFormData.review_text.trim().length < 5) {
+      setEditError('Please enter a detailed review description (minimum 5 characters).');
+      return;
+    }
+
+    setEditSubmitting(true);
+    try {
+      const token = await getCustomerToken();
+      if (!token) {
+        setEditError('Authentication session expired. Please sign in again.');
+        setEditSubmitting(false);
+        return;
+      }
+
+      const res = await fetch(`${apiBaseUrl}/reviews/${editingReview.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          rating: editFormData.rating,
+          title: editFormData.title.trim(),
+          review_text: editFormData.review_text.trim()
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setEditingReview(null);
+        await fetchReviews();
+      } else {
+        setEditError(data.error || 'Failed to update review.');
+      }
+    } catch (err) {
+      setEditError('Network error while updating review.');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  // Delete Review Handler
+  const handleDeleteReview = async (reviewId) => {
+    if (!window.confirm('Are you sure you want to delete your review?')) return;
+    setDeletingId(reviewId);
+    try {
+      const token = await getCustomerToken();
+      if (!token) {
+        alert('Authentication required.');
+        return;
+      }
+
+      const res = await fetch(`${apiBaseUrl}/reviews/${reviewId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        if (editingReview?.id === reviewId) setEditingReview(null);
+        await fetchReviews();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Could not delete review.');
+      }
+    } catch (err) {
+      alert('Network error while deleting review.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -168,10 +331,16 @@ export default function ProductReviews({
   const handleHelpfulClick = async (revId) => {
     if (helpfulVoted.has(revId)) return;
     setHelpfulVoted(prev => new Set(prev).add(revId));
-    setReviews(prev => prev.map(r => r.id === revId ? { ...r, helpful_count: (r.helpful_count || 0) + 1 } : r));
+    setReviews(prev => prev.map(r => r.id === revId ? { ...r, helpful_count: (Number(r.helpful_count) || 0) + 1 } : r));
+
     try {
-      await fetch(`${apiBaseUrl}/reviews/${revId}/helpful`, { method: 'POST' });
-    } catch (e) {}
+      const token = await getCustomerToken();
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      await fetch(`${apiBaseUrl}/reviews/${revId}/helpful`, { method: 'POST', headers });
+    } catch (e) {
+      console.warn('Could not record helpful vote:', e.message);
+    }
   };
 
   const getInitials = (name) => {
@@ -200,104 +369,216 @@ export default function ProductReviews({
     }
   };
 
+  const ratingLabels = {
+    5: '5.0 — Excellent & Pure',
+    4: '4.0 — Very Good Quality',
+    3: '3.0 — Average Experience',
+    2: '2.0 — Below Expectations',
+    1: '1.0 — Poor Quality'
+  };
+
   return (
     <div className="product-reviews-container" style={{ marginTop: '28px', paddingTop: '24px', borderTop: '1px solid var(--cream-deep, #e2e8f0)' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+      {/* Header Row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: 'var(--ink, #1e293b)' }}>
               Customer Reviews &amp; Ratings
             </h3>
-            <span style={{ background: 'rgba(143, 130, 105, 0.12)', color: '#8f8269', fontSize: '12px', fontWeight: '800', padding: '2px 8px', borderRadius: '12px' }}>
-              {stats.total} Reviews
-            </span>
+            {stats.total > 0 && (
+              <span style={{ background: 'rgba(143, 130, 105, 0.12)', color: '#8f8269', fontSize: '12px', fontWeight: '800', padding: '2px 8px', borderRadius: '12px' }}>
+                {stats.total} {stats.total === 1 ? 'Review' : 'Reviews'}
+              </span>
+            )}
           </div>
           <p style={{ margin: '4px 0 0', fontSize: '12.5px', color: 'var(--ink-soft, #64748b)' }}>
-            100% verified customer ratings &amp; authentic feedback
+            Real feedback from verified Krishiv Corporation customers
           </p>
         </div>
 
-        <button
-          onClick={() => setShowWriteForm(prev => !prev)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: showWriteForm ? '#f1f5f9' : '#8f8269',
-            color: showWriteForm ? '#334155' : '#ffffff',
-            border: showWriteForm ? '1px solid #cbd5e1' : 'none',
-            padding: '8px 16px',
-            borderRadius: '10px',
-            fontWeight: '700',
-            fontSize: '12.5px',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease'
-          }}
-        >
-          {showWriteForm ? <X size={15} /> : <Plus size={15} />}
-          {showWriteForm ? 'Close Form' : 'Write a Review'}
-        </button>
+        {/* Action Button */}
+        <div>
+          {userExistingReview ? (
+            <button
+              onClick={() => handleStartEdit(userExistingReview)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: '#f8fafc',
+                color: '#334155',
+                border: '1.5px solid #cbd5e1',
+                padding: '8px 16px',
+                borderRadius: '10px',
+                fontWeight: '700',
+                fontSize: '12.5px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Edit3 size={14} color="#8f8269" />
+              Edit Your Review
+            </button>
+          ) : (
+            <button
+              onClick={handleWriteClick}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: showWriteForm ? '#f1f5f9' : '#8f8269',
+                color: showWriteForm ? '#334155' : '#ffffff',
+                border: showWriteForm ? '1px solid #cbd5e1' : 'none',
+                padding: '8px 16px',
+                borderRadius: '10px',
+                fontWeight: '700',
+                fontSize: '12.5px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: showWriteForm ? 'none' : '0 2px 8px rgba(143, 130, 105, 0.25)'
+              }}
+            >
+              {showWriteForm ? <X size={15} /> : <Plus size={15} />}
+              {showWriteForm ? 'Cancel' : 'Write a Review'}
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Review Scorecard Box */}
-      <div style={{
-        background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.6) 100%)',
-        border: '1px solid #e2e8f0',
-        borderRadius: '16px',
-        padding: '20px',
-        marginBottom: '24px',
-        display: 'grid',
-        gridTemplateColumns: 'auto 1fr',
-        gap: '24px',
-        alignItems: 'center'
-      }}>
-        {/* Left Big Score */}
-        <div style={{ textAlign: 'center', paddingRight: '20px', borderRight: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '38px', fontWeight: '900', color: '#1e293b', lineHeight: '1' }}>
-            {stats.average}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '2px', color: '#f59e0b', margin: '6px 0 4px', fontSize: '16px' }}>
-            {'★'.repeat(Math.round(stats.average))}
-          </div>
-          <div style={{ fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
-            Out of 5.0
-          </div>
-          <div style={{ fontSize: '10.5px', color: '#059669', fontWeight: '700', marginTop: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
-            <CheckCircle2 size={12} /> 98% Recommend
-          </div>
-        </div>
-
-        {/* Right Star Breakdown Bars */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          {[5, 4, 3, 2, 1].map(star => {
-            const count = stats.breakdown[star] || 0;
-            const pct = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
-            return (
-              <div 
-                key={star} 
-                onClick={() => setFilterRating(filterRating === String(star) ? 'all' : String(star))}
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '8px', 
-                  fontSize: '11.5px', 
-                  cursor: 'pointer',
-                  opacity: (filterRating === 'all' || filterRating === String(star)) ? 1 : 0.45
-                }}
-              >
-                <span style={{ width: '38px', fontWeight: '700', color: '#334155' }}>{star} ★</span>
-                <div style={{ flex: 1, height: '8px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: `${pct}%`, height: '100%', background: star >= 4 ? '#f59e0b' : '#94a3b8', borderRadius: '4px', transition: 'width 0.4s ease' }} />
-                </div>
-                <span style={{ width: '42px', textAlign: 'right', fontWeight: '600', color: '#64748b', fontSize: '11px' }}>
-                  {pct}% ({count})
-                </span>
+      {/* Guest Login Prompt Modal / Alert */}
+      {showGuestPrompt && (
+        <div style={{
+          background: '#fffbeb',
+          border: '1.5px solid #fde68a',
+          borderRadius: '14px',
+          padding: '16px 20px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <LogIn size={20} color="#b45309" />
+            <div>
+              <div style={{ fontWeight: '800', fontSize: '13px', color: '#92400e' }}>
+                Sign In Required to Submit a Review
               </div>
-            );
-          })}
+              <div style={{ fontSize: '12px', color: '#b45309', marginTop: '2px' }}>
+                Please log in or create an account with your verified email to share your product experience.
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={() => {
+                setShowGuestPrompt(false);
+                if (onRequireLogin) onRequireLogin();
+              }}
+              style={{
+                background: '#8f8269',
+                color: '#ffffff',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: '700',
+                cursor: 'pointer'
+              }}
+            >
+              Sign In / Register
+            </button>
+            <button
+              onClick={() => setShowGuestPrompt(false)}
+              style={{
+                background: 'transparent',
+                border: '1px solid #d97706',
+                color: '#92400e',
+                padding: '7px 12px',
+                borderRadius: '8px',
+                fontSize: '12px',
+                cursor: 'pointer'
+              }}
+            >
+              Close
+            </button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Review Scorecard Box (Shown when reviews exist) */}
+      {stats.total > 0 && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.75) 100%)',
+          border: '1px solid #e2e8f0',
+          borderRadius: '16px',
+          padding: '20px',
+          marginBottom: '24px',
+          display: 'grid',
+          gridTemplateColumns: 'minmax(140px, auto) 1fr',
+          gap: '24px',
+          alignItems: 'center'
+        }}>
+          {/* Left Big Score */}
+          <div style={{ textAlign: 'center', paddingRight: '20px', borderRight: '1px solid #e2e8f0' }}>
+            <div style={{ fontSize: '38px', fontWeight: '900', color: '#1e293b', lineHeight: '1' }}>
+              {stats.average}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '2px', color: '#f59e0b', margin: '6px 0 4px', fontSize: '16px' }}>
+              {'★'.repeat(Math.round(stats.average)) + '☆'.repeat(5 - Math.round(stats.average))}
+            </div>
+            <div style={{ fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+              {stats.average} out of 5
+            </div>
+            <div style={{ fontSize: '11px', fontWeight: '600', color: '#94a3b8', marginTop: '3px' }}>
+              Based on {stats.total} {stats.total === 1 ? 'review' : 'reviews'}
+            </div>
+          </div>
+
+          {/* Right Star Breakdown Bars (5 stars to 1 star) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {[5, 4, 3, 2, 1].map(star => {
+              const count = stats.breakdown[star] || 0;
+              const pct = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
+              const isSelected = filterRating === String(star);
+              return (
+                <div 
+                  key={star} 
+                  onClick={() => setFilterRating(filterRating === String(star) ? 'all' : String(star))}
+                  title={`Filter by ${star} stars`}
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '10px', 
+                    fontSize: '11.5px', 
+                    cursor: 'pointer',
+                    opacity: (filterRating === 'all' || isSelected) ? 1 : 0.45,
+                    transition: 'opacity 0.2s'
+                  }}
+                >
+                  <span style={{ width: '42px', fontWeight: '700', color: isSelected ? '#8f8269' : '#334155' }}>
+                    {star} {star === 1 ? 'star' : 'stars'}
+                  </span>
+                  <div style={{ flex: 1, height: '9px', background: '#e2e8f0', borderRadius: '5px', overflow: 'hidden' }}>
+                    <div style={{ 
+                      width: `${pct}%`, 
+                      height: '100%', 
+                      background: star >= 4 ? '#f59e0b' : (star === 3 ? '#fbbf24' : '#94a3b8'), 
+                      borderRadius: '5px', 
+                      transition: 'width 0.4s ease' 
+                    }} />
+                  </div>
+                  <span style={{ width: '56px', textAlign: 'right', fontWeight: '600', color: '#64748b', fontSize: '11px' }}>
+                    {pct}% ({count})
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Write Review Form */}
       {showWriteForm && (
@@ -305,128 +586,117 @@ export default function ProductReviews({
           background: '#ffffff',
           border: '1.5px solid #8f8269',
           borderRadius: '16px',
-          padding: '20px',
+          padding: '22px',
           marginBottom: '24px',
           boxShadow: '0 8px 24px rgba(143, 130, 105, 0.12)'
         }}>
-          <h4 style={{ margin: '0 0 14px', fontSize: '15px', fontWeight: '800', color: '#1e293b' }}>
-            Share Your Experience with {productName}
-          </h4>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+            <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '800', color: '#1e293b' }}>
+              Write a Review for {productName}
+            </h4>
+            <span style={{ fontSize: '11.5px', color: '#64748b' }}>
+              Posting as: <strong style={{ color: '#1e293b' }}>{user?.name || user?.email?.split('@')[0] || 'Authenticated Customer'}</strong>
+            </span>
+          </div>
 
           {formSuccess ? (
             <div style={{ padding: '16px', background: '#dcfce7', border: '1px solid #86efac', borderRadius: '10px', color: '#166534', fontWeight: '700', fontSize: '13px', textAlign: 'center' }}>
-              ✓ Thank you! Your review has been submitted and verified.
+              ✓ {formSuccess}
             </div>
           ) : (
             <>
               {formError && (
-                <div style={{ padding: '10px 14px', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '8px', color: '#991b1b', fontSize: '12px', fontWeight: '600', marginBottom: '12px' }}>
-                  {formError}
+                <div style={{ padding: '10px 14px', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '8px', color: '#991b1b', fontSize: '12px', fontWeight: '600', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <AlertCircle size={15} />
+                  <span>{formError}</span>
                 </div>
               )}
 
-              {/* Rating selector */}
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>
-                  Overall Rating <span style={{ color: '#dc2626' }}>*</span>
+              {/* Star Rating Interactive Selector */}
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: '6px', letterSpacing: '0.5px' }}>
+                  Overall Star Rating <span style={{ color: '#dc2626' }}>*</span>
                 </label>
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                  {[1, 2, 3, 4, 5].map(s => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setFormData(f => ({ ...f, rating: s }))}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: '24px',
-                        color: s <= formData.rating ? '#f59e0b' : '#cbd5e1',
-                        padding: '0 2px',
-                        transition: 'transform 0.1s ease'
-                      }}
-                    >
-                      ★
-                    </button>
-                  ))}
-                  <span style={{ fontSize: '12px', fontWeight: '700', color: '#334155', marginLeft: '6px' }}>
-                    {formData.rating === 5 ? '5.0 - Excellent & Pure' : `${formData.rating}.0 - Good`}
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  {[1, 2, 3, 4, 5].map(s => {
+                    const active = hoverRating ? s <= hoverRating : s <= formData.rating;
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onMouseEnter={() => setHoverRating(s)}
+                        onMouseLeave={() => setHoverRating(0)}
+                        onClick={() => setFormData(f => ({ ...f, rating: s }))}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: '26px',
+                          color: active ? '#f59e0b' : '#cbd5e1',
+                          padding: '2px',
+                          transition: 'transform 0.15s ease',
+                          transform: active ? 'scale(1.1)' : 'scale(1)'
+                        }}
+                        aria-label={`${s} star`}
+                      >
+                        ★
+                      </button>
+                    );
+                  })}
+                  <span style={{ fontSize: '12.5px', fontWeight: '700', color: '#334155', marginLeft: '8px' }}>
+                    {ratingLabels[hoverRating || formData.rating]}
                   </span>
                 </div>
               </div>
 
-              {/* Name & City Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>
-                    Your Name <span style={{ color: '#dc2626' }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Priya Patel"
-                    value={formData.customer_name}
-                    onChange={e => setFormData({ ...formData, customer_name: e.target.value })}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', boxSizing: 'border-box' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>
-                    City / State
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Surat, Gujarat"
-                    value={formData.location}
-                    onChange={e => setFormData({ ...formData, location: e.target.value })}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', boxSizing: 'border-box' }}
-                  />
-                </div>
-              </div>
-
-              {/* Title */}
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>
-                  Review Headline
+              {/* Review Title */}
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.5px' }}>
+                  Review Title <span style={{ color: '#94a3b8', textTransform: 'none', fontWeight: '500' }}>(Optional)</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Incredible natural glow, highly recommend!"
+                  maxLength={120}
+                  placeholder="e.g. Excellent purity, amazing results on sensitive skin!"
                   value={formData.title}
                   onChange={e => setFormData({ ...formData, title: e.target.value })}
                   style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', boxSizing: 'border-box' }}
                 />
               </div>
 
-              {/* Comment */}
+              {/* Review Description */}
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.5px' }}>
                   Detailed Review <span style={{ color: '#dc2626' }}>*</span>
                 </label>
                 <textarea
                   required
-                  rows={3}
-                  placeholder="Tell us what you loved about the texture, purity, natural results, and packaging..."
-                  value={formData.comment}
-                  onChange={e => setFormData({ ...formData, comment: e.target.value })}
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', boxSizing: 'border-box' }}
+                  rows={4}
+                  placeholder="Share details about the texture, aroma, application, and results after using this product..."
+                  value={formData.review_text}
+                  onChange={e => setFormData({ ...formData, review_text: e.target.value })}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', boxSizing: 'border-box', lineHeight: '1.5' }}
                 />
+                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+                  Minimum 5 characters. Your privacy is protected; only your display name will appear.
+                </div>
               </div>
 
+              {/* Action Buttons */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                 <button
                   type="button"
                   onClick={() => setShowWriteForm(false)}
-                  style={{ padding: '8px 16px', borderRadius: '8px', background: 'transparent', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}
+                  style={{ padding: '8px 16px', borderRadius: '8px', background: 'transparent', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: '600', cursor: 'pointer', color: '#475569' }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  style={{ padding: '8px 20px', borderRadius: '8px', background: '#8f8269', color: '#ffffff', border: 'none', fontSize: '12px', fontWeight: '700', cursor: 'pointer', opacity: submitting ? 0.6 : 1 }}
+                  style={{ padding: '8px 22px', borderRadius: '8px', background: '#8f8269', color: '#ffffff', border: 'none', fontSize: '12px', fontWeight: '700', cursor: 'pointer', opacity: submitting ? 0.6 : 1 }}
                 >
-                  {submitting ? 'Submitting...' : 'Post Review'}
+                  {submitting ? 'Submitting Review...' : 'Submit Review'}
                 </button>
               </div>
             </>
@@ -434,170 +704,391 @@ export default function ProductReviews({
         </form>
       )}
 
-      {/* Filter Tabs */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', overflowX: 'auto', paddingBottom: '4px' }}>
-        <button
-          onClick={() => setFilterRating('all')}
-          style={{
-            padding: '6px 14px',
-            borderRadius: '20px',
-            border: filterRating === 'all' ? '1px solid #8f8269' : '1px solid #e2e8f0',
-            background: filterRating === 'all' ? '#8f8269' : '#ffffff',
-            color: filterRating === 'all' ? '#ffffff' : '#475569',
-            fontSize: '11.5px',
-            fontWeight: '700',
-            cursor: 'pointer'
-          }}
-        >
-          All Reviews ({reviews.length})
-        </button>
-        <button
-          onClick={() => setFilterRating('5')}
-          style={{
-            padding: '6px 14px',
-            borderRadius: '20px',
-            border: filterRating === '5' ? '1px solid #8f8269' : '1px solid #e2e8f0',
-            background: filterRating === '5' ? '#8f8269' : '#ffffff',
-            color: filterRating === '5' ? '#ffffff' : '#475569',
-            fontSize: '11.5px',
-            fontWeight: '700',
-            cursor: 'pointer'
-          }}
-        >
-          5 Stars ({stats.breakdown[5] || 0})
-        </button>
-        <button
-          onClick={() => setFilterRating('4')}
-          style={{
-            padding: '6px 14px',
-            borderRadius: '20px',
-            border: filterRating === '4' ? '1px solid #8f8269' : '1px solid #e2e8f0',
-            background: filterRating === '4' ? '#8f8269' : '#ffffff',
-            color: filterRating === '4' ? '#ffffff' : '#475569',
-            fontSize: '11.5px',
-            fontWeight: '700',
-            cursor: 'pointer'
-          }}
-        >
-          4 Stars ({stats.breakdown[4] || 0})
-        </button>
-      </div>
-
-      {/* Reviews List */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        {filteredReviews.slice(0, visibleCount).map((rev) => {
-          const isVoted = helpfulVoted.has(rev.id);
-          return (
-            <div
-              key={rev.id}
-              style={{
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderRadius: '14px',
-                padding: '16px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-              }}
+      {/* Edit Review Modal/Form */}
+      {editingReview && (
+        <form onSubmit={handleUpdateReview} style={{
+          background: '#ffffff',
+          border: '1.5px solid #2563eb',
+          borderRadius: '16px',
+          padding: '22px',
+          marginBottom: '24px',
+          boxShadow: '0 8px 24px rgba(37, 99, 235, 0.12)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+            <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '800', color: '#1e293b' }}>
+              Edit Your Review for {productName}
+            </h4>
+            <button
+              type="button"
+              onClick={() => setEditingReview(null)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
             >
-              {/* Reviewer Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    background: getAvatarColor(rev.customer_name),
-                    color: '#ffffff',
-                    fontWeight: '800',
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    {getInitials(rev.customer_name)}
-                  </div>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontWeight: '800', fontSize: '13px', color: '#1e293b' }}>
-                        {rev.customer_name}
-                      </span>
-                      {rev.verified_purchase !== false && (
-                        <span style={{
-                          background: '#dcfce7',
-                          color: '#166534',
-                          fontSize: '10px',
-                          fontWeight: '800',
-                          padding: '1.5px 6px',
-                          borderRadius: '6px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '2px'
-                        }}>
-                          <CheckCircle2 size={10} /> Verified
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: '10.5px', color: '#94a3b8' }}>
-                      {rev.location || 'India'} • {formatReviewDate(rev.created_at)}
-                    </div>
-                  </div>
-                </div>
+              <X size={16} />
+            </button>
+          </div>
 
-                {/* Stars */}
-                <div style={{ color: '#f59e0b', fontSize: '13px', fontWeight: '800' }}>
-                  {'★'.repeat(Math.round(rev.rating || 5))}
-                </div>
-              </div>
+          {editError && (
+            <div style={{ padding: '10px 14px', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '8px', color: '#991b1b', fontSize: '12px', fontWeight: '600', marginBottom: '14px' }}>
+              {editError}
+            </div>
+          )}
 
-              {/* Review Content */}
-              {rev.title && (
-                <div style={{ fontWeight: '700', fontSize: '13px', color: '#0f172a', marginBottom: '4px' }}>
-                  {rev.title}
-                </div>
-              )}
-              <p style={{ margin: 0, fontSize: '12.5px', lineHeight: '1.6', color: '#475569' }}>
-                "{rev.comment}"
-              </p>
-
-              {/* Helpful footer */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+          {/* Edit Stars */}
+          <div style={{ marginBottom: '14px' }}>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: '6px' }}>
+              Rating <span style={{ color: '#dc2626' }}>*</span>
+            </label>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              {[1, 2, 3, 4, 5].map(s => (
                 <button
-                  onClick={() => handleHelpfulClick(rev.id)}
+                  key={s}
+                  type="button"
+                  onClick={() => setEditFormData(f => ({ ...f, rating: s }))}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    background: isVoted ? '#f0fdf4' : 'transparent',
-                    border: isVoted ? '1px solid #bbf7d0' : '1px solid #e2e8f0',
-                    color: isVoted ? '#166534' : '#64748b',
-                    padding: '4px 10px',
-                    borderRadius: '8px',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    cursor: isVoted ? 'default' : 'pointer',
-                    transition: 'all 0.2s ease'
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '24px',
+                    color: s <= editFormData.rating ? '#f59e0b' : '#cbd5e1',
+                    padding: '2px'
                   }}
                 >
-                  <ThumbsUp size={12} style={{ color: isVoted ? '#166534' : '#64748b' }} />
-                  Helpful ({rev.helpful_count || 0})
+                  ★
                 </button>
-              </div>
+              ))}
+              <span style={{ fontSize: '12px', fontWeight: '700', color: '#334155', marginLeft: '6px' }}>
+                {ratingLabels[editFormData.rating]}
+              </span>
             </div>
-          );
-        })}
-      </div>
+          </div>
+
+          {/* Edit Title */}
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>
+              Review Title
+            </label>
+            <input
+              type="text"
+              value={editFormData.title}
+              onChange={e => setEditFormData({ ...editFormData, title: e.target.value })}
+              style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          {/* Edit Description */}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>
+              Review Description <span style={{ color: '#dc2626' }}>*</span>
+            </label>
+            <textarea
+              required
+              rows={4}
+              value={editFormData.review_text}
+              onChange={e => setEditFormData({ ...editFormData, review_text: e.target.value })}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          {/* Edit Actions */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={() => setEditingReview(null)}
+              style={{ padding: '8px 16px', borderRadius: '8px', background: 'transparent', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={editSubmitting}
+              style={{ padding: '8px 20px', borderRadius: '8px', background: '#2563eb', color: '#ffffff', border: 'none', fontSize: '12px', fontWeight: '700', cursor: 'pointer', opacity: editSubmitting ? 0.6 : 1 }}
+            >
+              {editSubmitting ? 'Saving Changes...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Filter Tabs (When reviews exist) */}
+      {stats.total > 0 && (
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', overflowX: 'auto', paddingBottom: '4px' }}>
+          <button
+            onClick={() => setFilterRating('all')}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '20px',
+              border: filterRating === 'all' ? '1px solid #8f8269' : '1px solid #e2e8f0',
+              background: filterRating === 'all' ? '#8f8269' : '#ffffff',
+              color: filterRating === 'all' ? '#ffffff' : '#475569',
+              fontSize: '11.5px',
+              fontWeight: '700',
+              cursor: 'pointer'
+            }}
+          >
+            All Reviews ({reviews.length})
+          </button>
+          {[5, 4, 3, 2, 1].map(s => {
+            const count = stats.breakdown[s] || 0;
+            if (count === 0 && filterRating !== String(s)) return null;
+            return (
+              <button
+                key={s}
+                onClick={() => setFilterRating(String(s))}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  border: filterRating === String(s) ? '1px solid #8f8269' : '1px solid #e2e8f0',
+                  background: filterRating === String(s) ? '#8f8269' : '#ffffff',
+                  color: filterRating === String(s) ? '#ffffff' : '#475569',
+                  fontSize: '11.5px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                {s} ★ ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Reviews List & Empty State */}
+      {loading ? (
+        <div style={{ padding: '30px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+          Loading customer reviews...
+        </div>
+      ) : reviews.length === 0 ? (
+        /* Empty State */
+        <div style={{
+          background: '#f8fafc',
+          border: '1.5px dashed #cbd5e1',
+          borderRadius: '16px',
+          padding: '36px 20px',
+          textAlign: 'center',
+          marginTop: '12px'
+        }}>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: '50%',
+            background: 'rgba(143, 130, 105, 0.1)',
+            color: '#8f8269',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 12px'
+          }}>
+            <MessageSquare size={22} />
+          </div>
+          <h4 style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: '800', color: '#1e293b' }}>
+            No reviews yet. Be the first to review this product!
+          </h4>
+          <p style={{ margin: '0 0 16px', fontSize: '12.5px', color: '#64748b', maxWidth: '380px', marginLeft: 'auto', marginRight: 'auto' }}>
+            Have you used our {productName}? Help other conscious shoppers by sharing your authentic experience.
+          </p>
+          <button
+            onClick={handleWriteClick}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: '#8f8269',
+              color: '#ffffff',
+              border: 'none',
+              padding: '9px 20px',
+              borderRadius: '10px',
+              fontWeight: '700',
+              fontSize: '12.5px',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(143, 130, 105, 0.25)'
+            }}
+          >
+            <Plus size={15} />
+            Write the First Review
+          </button>
+        </div>
+      ) : filteredReviews.length === 0 ? (
+        <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', fontSize: '12.5px', background: '#f8fafc', borderRadius: '12px' }}>
+          No {filterRating}-star reviews yet for this product.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {filteredReviews.slice(0, visibleCount).map((rev) => {
+            const isVoted = helpfulVoted.has(rev.id);
+            const isOwn = rev.is_own_review || (user?.id && String(user.id) === String(rev.user_id));
+            const reviewComment = rev.review_text || rev.comment || '';
+
+            return (
+              <div
+                key={rev.id}
+                style={{
+                  background: '#ffffff',
+                  border: isOwn ? '1.5px solid #cbd5e1' : '1px solid #e2e8f0',
+                  borderRadius: '14px',
+                  padding: '16px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                  position: 'relative'
+                }}
+              >
+                {/* Reviewer Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '50%',
+                      background: getAvatarColor(rev.customer_name),
+                      color: '#ffffff',
+                      fontWeight: '800',
+                      fontSize: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      {getInitials(rev.customer_name)}
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: '800', fontSize: '13px', color: '#1e293b' }}>
+                          Customer: {rev.customer_name}
+                        </span>
+                        {rev.verified_purchase && (
+                          <span style={{
+                            background: '#dcfce7',
+                            color: '#166534',
+                            fontSize: '10.5px',
+                            fontWeight: '800',
+                            padding: '1.5px 7px',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px'
+                          }}>
+                            <CheckCircle2 size={11} /> Verified Purchase
+                          </span>
+                        )}
+                        {isOwn && (
+                          <span style={{
+                            background: '#eff6ff',
+                            color: '#1d4ed8',
+                            fontSize: '10px',
+                            fontWeight: '700',
+                            padding: '1px 6px',
+                            borderRadius: '4px'
+                          }}>
+                            Your Review
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                        Date: {formatReviewDate(rev.created_at)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Stars Display */}
+                  <div style={{ color: '#f59e0b', fontSize: '14px', fontWeight: '800', letterSpacing: '1px' }}>
+                    {'★'.repeat(Math.round(rev.rating || 5)) + '☆'.repeat(5 - Math.round(rev.rating || 5))}
+                  </div>
+                </div>
+
+                {/* Review Title */}
+                {rev.title && (
+                  <div style={{ fontWeight: '700', fontSize: '13.5px', color: '#0f172a', marginBottom: '4px' }}>
+                    {rev.title}
+                  </div>
+                )}
+
+                {/* Review Text */}
+                <p style={{ margin: '4px 0 10px', fontSize: '12.5px', lineHeight: '1.6', color: '#475569', whiteSpace: 'pre-line' }}>
+                  {reviewComment}
+                </p>
+
+                {/* Footer: Helpful button & Author Controls */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid #f1f5f9', marginTop: '8px' }}>
+                  <div>
+                    {isOwn && (
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={() => handleStartEdit(rev)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            background: 'transparent',
+                            border: '1px solid #cbd5e1',
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            fontSize: '11px',
+                            color: '#334155',
+                            cursor: 'pointer',
+                            fontWeight: '600'
+                          }}
+                        >
+                          <Edit3 size={11} /> Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteReview(rev.id)}
+                          disabled={deletingId === rev.id}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            background: 'transparent',
+                            border: '1px solid #fecaca',
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            fontSize: '11px',
+                            color: '#dc2626',
+                            cursor: 'pointer',
+                            fontWeight: '600'
+                          }}
+                        >
+                          <Trash2 size={11} /> {deletingId === rev.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => handleHelpfulClick(rev.id)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      background: isVoted ? '#f0fdf4' : 'transparent',
+                      border: isVoted ? '1px solid #bbf7d0' : '1px solid #e2e8f0',
+                      color: isVoted ? '#166534' : '#64748b',
+                      padding: '4px 10px',
+                      borderRadius: '8px',
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      cursor: isVoted ? 'default' : 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <ThumbsUp size={12} style={{ color: isVoted ? '#166534' : '#64748b' }} />
+                    Helpful ({rev.helpful_count || 0})
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Load More Button */}
       {visibleCount < filteredReviews.length && (
         <div style={{ textAlign: 'center', marginTop: '18px' }}>
           <button
-            onClick={() => setVisibleCount(c => c + 8)}
+            onClick={() => setVisibleCount(c => c + 6)}
             style={{
-              padding: '10px 24px',
+              padding: '9px 20px',
               borderRadius: '24px',
               background: '#f8fafc',
               border: '1.5px solid #cbd5e1',
               color: '#334155',
-              fontSize: '12.5px',
+              fontSize: '12px',
               fontWeight: '700',
               cursor: 'pointer',
               display: 'inline-flex',
@@ -609,9 +1100,6 @@ export default function ProductReviews({
             <ChevronDown size={14} />
             Load More Reviews ({filteredReviews.length - visibleCount} remaining)
           </button>
-          <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px' }}>
-            Showing {Math.min(visibleCount, filteredReviews.length)} of {filteredReviews.length} reviews
-          </div>
         </div>
       )}
     </div>

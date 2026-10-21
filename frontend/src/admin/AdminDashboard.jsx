@@ -2342,7 +2342,7 @@ export default function AdminDashboard({ onNavigateHome }) {
           {/* 8. REVIEWS MODERATION */}
           {activeTab === 'reviews' && (() => {
             const totalCount = reviews.length;
-            const avgRating = totalCount > 0 ? (reviews.reduce((s, r) => s + (Number(r.rating) || 5), 0) / totalCount).toFixed(1) : '4.9';
+            const avgRating = totalCount > 0 ? (reviews.reduce((s, r) => s + (Number(r.rating) || 5), 0) / totalCount).toFixed(1) : '0.0';
             const fiveStarCount = reviews.filter(r => Number(r.rating) === 5).length;
             const fourStarCount = reviews.filter(r => Number(r.rating) === 4).length;
 
@@ -2402,7 +2402,7 @@ export default function AdminDashboard({ onNavigateHome }) {
                   <div style={{ background: themeCardBg, border: `1px solid ${themeBorder}`, borderRadius: '16px', padding: '18px' }}>
                     <div style={{ fontSize: '11px', fontWeight: '700', color: themeTextSoft, textTransform: 'uppercase' }}>Coverage</div>
                     <div style={{ fontSize: '28px', fontWeight: '900', color: '#8f8269', margin: '6px 0 2px' }}>6 / 6 Products</div>
-                    <div style={{ fontSize: '11.5px', color: '#059669', fontWeight: '600' }}>50–100 reviews per product</div>
+                    <div style={{ fontSize: '11.5px', color: '#059669', fontWeight: '600' }}>Real verified feedback</div>
                   </div>
                 </div>
 
