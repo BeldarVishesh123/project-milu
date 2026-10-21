@@ -116,7 +116,7 @@ const NotificationSchema = new mongoose.Schema({
 
 const ReviewSchema = new mongoose.Schema({
     id: { type: String, required: true, unique: true },
-    product_id: { type: Number, required: true, index: true },
+    product_id: { type: mongoose.Schema.Types.Mixed, required: true, index: true },
     product_name: { type: String, required: true },
     user_id: { type: String, required: true, index: true },
     customer_name: { type: String, required: true },
@@ -147,17 +147,47 @@ const ReviewModel = mongoose.model('Review', ReviewSchema);
 const syncProductRatings = async (productId = null) => {
     try {
         if (!isMongoConnected) return;
-        const query = productId !== null ? { id: Number(productId) } : {};
+        const numId = Number(productId);
+        const query = productId !== null 
+            ? { 
+                $or: [
+                    ...(Number.isFinite(numId) ? [{ id: numId }] : []),
+                    { id: productId },
+                    ...(String(productId).length === 24 ? [{ _id: productId }] : [])
+                ] 
+              } 
+            : {};
         const prods = await ProductModel.find(query).lean();
         for (const prod of prods) {
-            const pId = Number(prod.id);
-            const approved = await ReviewModel.find({ product_id: pId, status: 'approved' }).lean();
+            const pId = prod.id !== undefined && prod.id !== null ? prod.id : prod._id;
+            const matchIds = [pId, String(pId)];
+            if (Number.isFinite(Number(pId))) matchIds.push(Number(pId));
+            if (prod._id) matchIds.push(String(prod._id));
+            const uniqueMatch = [...new Set(matchIds)];
+
+            const approved = await ReviewModel.find({
+                $or: [
+                    { product_id: { $in: uniqueMatch } },
+                    ...(prod.name ? [{ product_name: prod.name }] : [])
+                ],
+                status: 'approved'
+            }).lean();
+
             const count = approved.length;
             const avg = count > 0 
                 ? Number((approved.reduce((acc, r) => acc + (Number(r.rating) || 5), 0) / count).toFixed(1))
                 : 0;
-            await ProductModel.updateOne({ id: pId }, { $set: { rating: avg, review_count: count } });
-            const mockIdx = mockProducts.findIndex(p => Number(p.id) === pId);
+
+            await ProductModel.updateOne(
+                { _id: prod._id }, 
+                { $set: { rating: avg, review_count: count } }
+            );
+
+            const mockIdx = mockProducts.findIndex(p => 
+                (Number.isFinite(Number(pId)) && Number(p.id) === Number(pId)) ||
+                String(p.id) === String(pId) ||
+                p.name === prod.name
+            );
             if (mockIdx !== -1) {
                 mockProducts[mockIdx].rating = avg;
                 mockProducts[mockIdx].review_count = count;
@@ -1349,20 +1379,30 @@ app.get('/api/products', async (req, res) => {
 
             // Real dynamic review statistics per product from database
             const approvedReviews = await ReviewModel.find({ status: 'approved' }).lean();
-            const statsMap = new Map();
-            approvedReviews.forEach(r => {
-                const pId = Number(r.product_id);
-                if (!statsMap.has(pId)) statsMap.set(pId, { count: 0, sum: 0 });
-                const st = statsMap.get(pId);
-                st.count += 1;
-                st.sum += (Number(r.rating) || 5);
-            });
 
             productsList = productsList.map(p => {
-                const pId = Number(p.id);
-                const st = statsMap.get(pId);
-                const count = st ? st.count : 0;
-                const avg = count > 0 ? Number((st.sum / count).toFixed(1)) : 0;
+                const pNum = Number(p.id);
+                const pStr = String(p.id);
+                const pOid = p._id ? String(p._id) : null;
+                const pName = p.name ? p.name.toLowerCase().trim() : '';
+
+                const matching = approvedReviews.filter(r => {
+                    const rNum = Number(r.product_id);
+                    const rStr = String(r.product_id);
+                    const rName = r.product_name ? r.product_name.toLowerCase().trim() : '';
+                    return (
+                        (Number.isFinite(pNum) && rNum === pNum) ||
+                        rStr === pStr ||
+                        (pOid && rStr === pOid) ||
+                        (pName && rName === pName)
+                    );
+                });
+
+                const count = matching.length;
+                const avg = count > 0 
+                    ? Number((matching.reduce((acc, r) => acc + (Number(r.rating) || 5), 0) / count).toFixed(1))
+                    : 0;
+
                 return {
                     ...p,
                     rating: avg,
@@ -4489,49 +4529,99 @@ app.get('/api/products/:id/reviews', async (req, res) => {
     const currentUser = token ? verifyCustomerToken(token) : null;
     const currentUserId = currentUser ? String(currentUser.id) : null;
 
-    let list = [];
+    // 1. Find product to resolve all potential aliases (numeric ID, string ID, Mongo ObjectId, name)
+    let productObj = null;
     if (isMongoConnected) {
         try {
-            list = await ReviewModel.find({
-                product_id: numId,
+            productObj = await ProductModel.findOne({
+                $or: [
+                    ...(Number.isFinite(numId) ? [{ id: numId }] : []),
+                    { id: rawId },
+                    ...(rawId && rawId.length === 24 ? [{ _id: rawId }] : []),
+                    { name: new RegExp(`^${rawId}$`, 'i') }
+                ]
+            }).lean();
+        } catch (e) {}
+    }
+    if (!productObj) {
+        productObj = mockProducts.find(p => 
+            (Number.isFinite(numId) && Number(p.id) === numId) ||
+            String(p.id) === String(rawId) ||
+            p.name?.toLowerCase() === String(rawId).toLowerCase()
+        );
+    }
+
+    const resolvedProductId = productObj ? (productObj.id !== undefined ? productObj.id : productObj._id) : (Number.isFinite(numId) ? numId : rawId);
+    const resolvedProductName = productObj ? productObj.name : 'Krishiv Product';
+
+    // Build all matching keys for this product
+    const matchIds = [rawId];
+    if (Number.isFinite(numId)) matchIds.push(numId);
+    if (productObj) {
+        if (productObj.id !== undefined && productObj.id !== null) matchIds.push(productObj.id, String(productObj.id));
+        if (productObj._id) matchIds.push(String(productObj._id));
+    }
+    const uniqueMatchIds = [...new Set(matchIds)];
+
+    let allApprovedReviews = [];
+    if (isMongoConnected) {
+        try {
+            allApprovedReviews = await ReviewModel.find({
+                $or: [
+                    { product_id: { $in: uniqueMatchIds } },
+                    ...(productObj?.name ? [{ product_name: productObj.name }] : [])
+                ],
                 status: 'approved'
             }).sort({ created_at: -1 }).lean();
         } catch (e) {
             console.error('[GET REVIEWS DB ERROR]', e.message);
         }
-    }
-    if (!list || list.length === 0) {
-        list = mockReviews.filter(r => (Number(r.product_id) === numId || String(r.product_id) === String(rawId)) && r.status === 'approved');
-        list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    } else {
+        allApprovedReviews = mockReviews.filter(r => 
+            (uniqueMatchIds.includes(r.product_id) || uniqueMatchIds.includes(String(r.product_id)) || (productObj?.name && r.product_name === productObj.name)) &&
+            r.status === 'approved'
+        );
+        allApprovedReviews.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     }
 
-    const total = list.length;
-    const sumRatings = list.reduce((acc, r) => acc + (Number(r.rating) || 5), 0);
+    const total = allApprovedReviews.length;
+    const sumRatings = allApprovedReviews.reduce((acc, r) => acc + (Number(r.rating) || 5), 0);
     const average = total > 0 ? Number((sumRatings / total).toFixed(1)) : 0;
 
-    // Rating distribution from 5 stars to 1 star
+    // Rating distribution from 5 stars to 1 star (computed over ALL approved reviews for this product)
     const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
-    list.forEach(r => {
+    allApprovedReviews.forEach(r => {
         const star = Math.max(1, Math.min(5, Math.floor(Number(r.rating) || 5)));
         distribution[star] = (distribution[star] || 0) + 1;
     });
 
+    // Optional rating filter (5, 4, 3, 2, 1)
+    const ratingFilter = req.query.rating;
+    const filteredList = (ratingFilter && ratingFilter !== 'all')
+        ? allApprovedReviews.filter(r => Math.floor(Number(r.rating)) === Number(ratingFilter))
+        : allApprovedReviews;
+    const filteredTotal = filteredList.length;
+
     // Pagination
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const limit = Math.max(1, parseInt(req.query.limit, 10) || 20);
+    const limitParam = req.query.limit;
+    const limit = limitParam === 'all' ? (filteredTotal || 10) : Math.max(1, parseInt(limitParam, 10) || 10);
     const startIndex = (page - 1) * limit;
-    const paginatedList = list.slice(startIndex, startIndex + limit);
+    const paginatedList = filteredList.slice(startIndex, startIndex + limit);
+    const totalPages = Math.ceil(filteredTotal / limit) || 1;
+    const hasMore = startIndex + limit < filteredTotal;
 
     // Map fields with privacy-safe display and own-review flag
     const formattedReviews = paginatedList.map(r => ({
         id: r.id,
         product_id: r.product_id,
-        product_name: r.product_name,
+        product_name: r.product_name || resolvedProductName,
         user_id: r.user_id,
         customer_name: formatPrivacyCustomerName(r.customer_name),
         rating: Number(r.rating) || 5,
         title: r.title || '',
         review_text: r.review_text || r.comment || '',
+        comment: r.review_text || r.comment || '',
         verified_purchase: Boolean(r.verified_purchase),
         helpful_count: Number(r.helpful_count) || 0,
         created_at: r.created_at,
@@ -4541,13 +4631,16 @@ app.get('/api/products/:id/reviews', async (req, res) => {
 
     return res.json({
         success: true,
-        product_id: numId,
+        product_id: resolvedProductId,
+        product_name: resolvedProductName,
         total,
         average_rating: average,
         distribution,
+        filtered_total: filteredTotal,
         page,
         limit,
-        total_pages: Math.ceil(total / limit) || 1,
+        total_pages: totalPages,
+        has_more: hasMore,
         reviews: formattedReviews
     });
 });
@@ -4558,18 +4651,33 @@ app.post('/api/products/:id/reviews', requireCustomerAuth, async (req, res) => {
     const rawId = req.params.id;
     const numId = Number(rawId);
 
-    // 1. Verify Product Exists
-    const dbProduct = mockProducts.find(p => Number(p.id) === numId || String(p.id) === String(rawId));
-    let productName = dbProduct ? dbProduct.name : null;
-    if (!productName && isMongoConnected) {
+    // 1. Verify Product Exists (Lookup across numeric ID, string ID, Mongo ObjectId, or name)
+    let productObj = null;
+    if (isMongoConnected) {
         try {
-            const pObj = await ProductModel.findOne({ $or: [{ id: numId }, { _id: rawId }] }).lean();
-            if (pObj) productName = pObj.name;
+            productObj = await ProductModel.findOne({
+                $or: [
+                    ...(Number.isFinite(numId) ? [{ id: numId }] : []),
+                    { id: rawId },
+                    ...(rawId && rawId.length === 24 ? [{ _id: rawId }] : []),
+                    { name: new RegExp(`^${rawId}$`, 'i') }
+                ]
+            }).lean();
         } catch (e) {}
     }
-    if (!productName) {
+    if (!productObj) {
+        productObj = mockProducts.find(p => 
+            (Number.isFinite(numId) && Number(p.id) === numId) ||
+            String(p.id) === String(rawId) ||
+            p.name?.toLowerCase() === String(rawId).toLowerCase()
+        );
+    }
+    if (!productObj) {
         return res.status(404).json({ error: 'Product not found. Please review an existing product.' });
     }
+
+    const actualProductId = productObj.id !== undefined && productObj.id !== null ? productObj.id : (Number.isFinite(numId) ? numId : rawId);
+    const productName = productObj.name;
 
     // 2. Validate Inputs
     const { rating, title, review_text, description, comment } = req.body;

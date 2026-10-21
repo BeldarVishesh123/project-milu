@@ -8,11 +8,11 @@ import {
   X, 
   ChevronDown, 
   User, 
-  ShieldCheck, 
   Edit3, 
   Trash2, 
   AlertCircle, 
-  LogIn 
+  LogIn,
+  Loader2
 } from 'lucide-react';
 
 export default function ProductReviews({ 
@@ -23,12 +23,26 @@ export default function ProductReviews({
   onRequireLogin = null,
   onReviewChanged = null
 }) {
-  const numId = Number(productId) || 1;
+  const safeProductId = productId !== undefined && productId !== null ? productId : 1;
 
+  // Review list & pagination state
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [fetchError, setFetchError] = useState('');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const [filterRating, setFilterRating] = useState('all');
-  const [visibleCount, setVisibleCount] = useState(6);
+  const [filteredTotal, setFilteredTotal] = useState(0);
+
+  // Overall product stats
+  const [stats, setStats] = useState({
+    total: 0,
+    average: 0,
+    breakdown: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
+  });
+
+  // UI state
   const [showWriteForm, setShowWriteForm] = useState(false);
   const [showGuestPrompt, setShowGuestPrompt] = useState(false);
   const [helpfulVoted, setHelpfulVoted] = useState(new Set());
@@ -61,7 +75,6 @@ export default function ProductReviews({
     const stored = localStorage.getItem('krishiv_auth_token');
     if (stored) return stored;
 
-    // If user is logged in in state or localStorage without token, get one from backend
     const savedUserStr = localStorage.getItem('user');
     const u = user || (savedUserStr ? JSON.parse(savedUserStr) : null);
     if (u && (u.id || u.email)) {
@@ -69,7 +82,7 @@ export default function ProductReviews({
         const res = await fetch(`${apiBaseUrl}/auth/token`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: u.id, email: u.email })
+          body: JSON.stringify({ userId: u.id, email: u.email, name: u.name })
         });
         if (res.ok) {
           const data = await res.json();
@@ -85,66 +98,102 @@ export default function ProductReviews({
     return null;
   }, [user, apiBaseUrl]);
 
-  // Fetch real reviews from backend API on mount or productId change
-  const fetchReviews = useCallback(async () => {
+  // Fetch initial page of reviews whenever productId or filterRating changes
+  const fetchInitialReviews = useCallback(async () => {
     setLoading(true);
+    setFetchError('');
+    setPage(1);
+
     try {
       const token = await getCustomerToken();
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${apiBaseUrl}/products/${numId}/reviews?limit=100`, { headers });
+      const url = `${apiBaseUrl}/products/${encodeURIComponent(safeProductId)}/reviews?page=1&limit=10&rating=${filterRating}`;
+      const res = await fetch(url, { headers });
+
       if (res.ok) {
         const data = await res.json();
-        if (data.success && Array.isArray(data.reviews)) {
-          setReviews(data.reviews);
+        if (data.success) {
+          const fetchedList = Array.isArray(data.reviews) ? data.reviews : [];
+          setReviews(fetchedList);
+          setHasMore(Boolean(data.has_more));
+          setFilteredTotal(data.filtered_total !== undefined ? data.filtered_total : data.total);
+
+          const newStats = {
+            total: data.total || 0,
+            average: data.average_rating || 0,
+            breakdown: data.distribution || { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
+          };
+          setStats(newStats);
+
           if (onReviewChanged) {
             onReviewChanged({
-              total: data.total || data.reviews.length,
-              average: data.average_rating || 0
+              total: newStats.total,
+              average: newStats.average
             });
           }
         } else {
           setReviews([]);
+          setHasMore(false);
+          setFilteredTotal(0);
         }
       } else {
+        setFetchError('Failed to load reviews from server.');
         setReviews([]);
+        setHasMore(false);
       }
     } catch (err) {
-      console.warn('Could not fetch reviews from server:', err.message);
+      console.warn('Error fetching reviews:', err.message);
+      setFetchError('Network error while loading reviews.');
       setReviews([]);
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
-  }, [numId, apiBaseUrl, getCustomerToken, onReviewChanged]);
+  }, [safeProductId, filterRating, apiBaseUrl, getCustomerToken, onReviewChanged]);
 
+  // Load reviews on mount or when productId/filter changes
   useEffect(() => {
-    fetchReviews();
-  }, [fetchReviews]);
+    fetchInitialReviews();
+  }, [fetchInitialReviews]);
 
-  // Dynamic Real Aggregates
-  const stats = useMemo(() => {
-    const total = reviews.length;
-    if (total === 0) {
-      return {
-        total: 0,
-        average: 0,
-        breakdown: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
-      };
+  // Fetch next page when user clicks "Load More Reviews"
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+
+    try {
+      const token = await getCustomerToken();
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const nextPage = page + 1;
+      const url = `${apiBaseUrl}/products/${encodeURIComponent(safeProductId)}/reviews?page=${nextPage}&limit=10&rating=${filterRating}`;
+      const res = await fetch(url, { headers });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.reviews)) {
+          setReviews(prev => {
+            const existingIds = new Set(prev.map(r => r.id));
+            const newUnique = data.reviews.filter(r => !existingIds.has(r.id));
+            return [...prev, ...newUnique];
+          });
+          setPage(nextPage);
+          setHasMore(Boolean(data.has_more));
+          if (data.filtered_total !== undefined) setFilteredTotal(data.filtered_total);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading more reviews:', err);
+    } finally {
+      setLoadingMore(false);
     }
-    const sum = reviews.reduce((acc, r) => acc + (Number(r.rating) || 5), 0);
-    const avg = Number((sum / total).toFixed(1));
-    const breakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
-    reviews.forEach(r => {
-      const star = Math.max(1, Math.min(5, Math.floor(Number(r.rating) || 5)));
-      breakdown[star] = (breakdown[star] || 0) + 1;
-    });
-    return { total, average: avg, breakdown };
-  }, [reviews]);
+  };
 
-  // Check if current user has already submitted a review
+  // Check if current user has already submitted a review for this product
   const userExistingReview = useMemo(() => {
-    if (!user && !localStorage.getItem('user')) return null;
     const currentId = user?.id || (() => {
       try {
         const saved = localStorage.getItem('user');
@@ -157,12 +206,6 @@ export default function ProductReviews({
     return reviews.find(r => r.is_own_review || String(r.user_id) === String(currentId));
   }, [reviews, user]);
 
-  // Filtered reviews
-  const filteredReviews = useMemo(() => {
-    if (filterRating === 'all') return reviews;
-    return reviews.filter(r => Math.floor(Number(r.rating)) === Number(filterRating));
-  }, [reviews, filterRating]);
-
   // Handle clicking "Write a Review" button
   const handleWriteClick = () => {
     const isAuthed = Boolean(user?.token || localStorage.getItem('krishiv_auth_token') || localStorage.getItem('user'));
@@ -172,7 +215,6 @@ export default function ProductReviews({
       return;
     }
     if (userExistingReview) {
-      // Prompt user to edit their existing review
       handleStartEdit(userExistingReview);
       return;
     }
@@ -210,7 +252,7 @@ export default function ProductReviews({
         description: formData.review_text.trim()
       };
 
-      const res = await fetch(`${apiBaseUrl}/products/${numId}/reviews`, {
+      const res = await fetch(`${apiBaseUrl}/products/${encodeURIComponent(safeProductId)}/reviews`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -223,7 +265,7 @@ export default function ProductReviews({
       if (res.ok && data.success) {
         setFormSuccess('Thank you! Your verified review has been published successfully.');
         setFormData({ rating: 5, title: '', review_text: '' });
-        await fetchReviews();
+        await fetchInitialReviews();
         setTimeout(() => {
           setShowWriteForm(false);
           setFormSuccess('');
@@ -286,7 +328,7 @@ export default function ProductReviews({
       const data = await res.json();
       if (res.ok && data.success) {
         setEditingReview(null);
-        await fetchReviews();
+        await fetchInitialReviews();
       } else {
         setEditError(data.error || 'Failed to update review.');
       }
@@ -315,7 +357,7 @@ export default function ProductReviews({
 
       if (res.ok) {
         if (editingReview?.id === reviewId) setEditingReview(null);
-        await fetchReviews();
+        await fetchInitialReviews();
       } else {
         const data = await res.json();
         alert(data.error || 'Could not delete review.');
@@ -378,7 +420,11 @@ export default function ProductReviews({
   };
 
   return (
-    <div className="product-reviews-container" style={{ marginTop: '28px', paddingTop: '24px', borderTop: '1px solid var(--cream-deep, #e2e8f0)' }}>
+    <div 
+      id="product-reviews-section" 
+      className="product-reviews-container" 
+      style={{ marginTop: '28px', paddingTop: '24px', borderTop: '1px solid var(--cream-deep, #e2e8f0)' }}
+    >
       {/* Header Row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
         <div>
@@ -537,7 +583,7 @@ export default function ProductReviews({
             </div>
           </div>
 
-          {/* Right Star Breakdown Bars (5 stars to 1 star) */}
+          {/* Right Star Breakdown Bars (5 stars down to 1 star) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {[5, 4, 3, 2, 1].map(star => {
               const count = stats.breakdown[star] || 0;
@@ -822,10 +868,11 @@ export default function ProductReviews({
               color: filterRating === 'all' ? '#ffffff' : '#475569',
               fontSize: '11.5px',
               fontWeight: '700',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              whiteSpace: 'nowrap'
             }}
           >
-            All Reviews ({reviews.length})
+            All Reviews ({stats.total})
           </button>
           {[5, 4, 3, 2, 1].map(s => {
             const count = stats.breakdown[s] || 0;
@@ -842,10 +889,11 @@ export default function ProductReviews({
                   color: filterRating === String(s) ? '#ffffff' : '#475569',
                   fontSize: '11.5px',
                   fontWeight: '700',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
                 }}
               >
-                {s} ★ ({count})
+                {s} Stars ({count})
               </button>
             );
           })}
@@ -854,11 +902,16 @@ export default function ProductReviews({
 
       {/* Reviews List & Empty State */}
       {loading ? (
-        <div style={{ padding: '30px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
-          Loading customer reviews...
+        <div style={{ padding: '36px', textAlign: 'center', color: '#64748b', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+          <Loader2 size={16} className="animate-spin" />
+          <span>Loading customer reviews...</span>
         </div>
-      ) : reviews.length === 0 ? (
-        /* Empty State */
+      ) : fetchError ? (
+        <div style={{ padding: '24px', textAlign: 'center', color: '#dc2626', fontSize: '13px', background: '#fee2e2', borderRadius: '12px' }}>
+          {fetchError}
+        </div>
+      ) : stats.total === 0 ? (
+        /* Empty State (Exact user requirement string) */
         <div style={{
           background: '#f8fafc',
           border: '1.5px dashed #cbd5e1',
@@ -881,7 +934,7 @@ export default function ProductReviews({
             <MessageSquare size={22} />
           </div>
           <h4 style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: '800', color: '#1e293b' }}>
-            No reviews yet. Be the first to review this product!
+            No reviews yet. Be the first to review this product.
           </h4>
           <p style={{ margin: '0 0 16px', fontSize: '12.5px', color: '#64748b', maxWidth: '380px', marginLeft: 'auto', marginRight: 'auto' }}>
             Have you used our {productName}? Help other conscious shoppers by sharing your authentic experience.
@@ -907,13 +960,13 @@ export default function ProductReviews({
             Write the First Review
           </button>
         </div>
-      ) : filteredReviews.length === 0 ? (
+      ) : reviews.length === 0 ? (
         <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', fontSize: '12.5px', background: '#f8fafc', borderRadius: '12px' }}>
           No {filterRating}-star reviews yet for this product.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {filteredReviews.slice(0, visibleCount).map((rev) => {
+          {reviews.map((rev) => {
             const isVoted = helpfulVoted.has(rev.id);
             const isOwn = rev.is_own_review || (user?.id && String(user.id) === String(rev.user_id));
             const reviewComment = rev.review_text || rev.comment || '';
@@ -1077,29 +1130,50 @@ export default function ProductReviews({
         </div>
       )}
 
-      {/* Load More Button */}
-      {visibleCount < filteredReviews.length && (
-        <div style={{ textAlign: 'center', marginTop: '18px' }}>
+      {/* Working Load More Reviews Button */}
+      {hasMore && !loading && (
+        <div style={{ textAlign: 'center', marginTop: '20px' }}>
           <button
-            onClick={() => setVisibleCount(c => c + 6)}
+            onClick={handleLoadMore}
+            disabled={loadingMore}
             style={{
-              padding: '9px 20px',
+              padding: '10px 24px',
               borderRadius: '24px',
               background: '#f8fafc',
               border: '1.5px solid #cbd5e1',
               color: '#334155',
-              fontSize: '12px',
+              fontSize: '12.5px',
               fontWeight: '700',
-              cursor: 'pointer',
+              cursor: loadingMore ? 'wait' : 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
+              boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+              transition: 'all 0.2s ease'
             }}
           >
-            <ChevronDown size={14} />
-            Load More Reviews ({filteredReviews.length - visibleCount} remaining)
+            {loadingMore ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                <span>Loading more reviews...</span>
+              </>
+            ) : (
+              <>
+                <ChevronDown size={14} />
+                <span>Load More Reviews ({Math.max(0, filteredTotal - reviews.length)} remaining)</span>
+              </>
+            )}
           </button>
+          <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px' }}>
+            Showing {reviews.length} of {filteredTotal} {filterRating === 'all' ? '' : `${filterRating}-star `}reviews
+          </div>
+        </div>
+      )}
+
+      {/* Indicator when all reviews are loaded */}
+      {!hasMore && reviews.length > 0 && reviews.length === filteredTotal && (
+        <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '11.5px', color: '#94a3b8' }}>
+          ✓ Showing all {reviews.length} available reviews
         </div>
       )}
     </div>

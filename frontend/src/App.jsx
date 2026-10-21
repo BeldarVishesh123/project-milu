@@ -2381,7 +2381,13 @@ export default function App() {
                             <div 
                               className="rating-row" 
                               style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }} 
-                              onClick={() => changePage('product-details', { product: p })}
+                              onClick={() => {
+                                changePage('product-details', { product: p });
+                                setTimeout(() => {
+                                  const el = document.getElementById('product-reviews-section');
+                                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                                }, 200);
+                              }}
                               title={p.review_count > 0 ? "Click to view verified customer reviews" : "No reviews yet. Be the first to review!"}
                             >
                               {p.review_count > 0 ? (
@@ -2442,7 +2448,13 @@ export default function App() {
                                 {isOutOfStock(p) ? 'OUT OF STOCK' : 'Buy Now'}
                               </button>
                               <button 
-                                onClick={() => changePage('product-details', { product: p })}
+                                onClick={() => {
+                                changePage('product-details', { product: p });
+                                setTimeout(() => {
+                                  const el = document.getElementById('product-reviews-section');
+                                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                                }, 200);
+                              }}
                                 className="btn-action btn-outline-action"
                               >
                                 <Eye size={14} />
@@ -4536,19 +4548,26 @@ export default function App() {
               <h3 style={{ margin: '4px 0 6px' }}>{selectedProduct.name}</h3>
 
               {/* Rating and review count badge */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+              <div 
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', flexWrap: 'wrap', cursor: 'pointer' }}
+                onClick={() => {
+                  const el = document.getElementById('product-reviews-section');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
+                title="Click to view verified customer reviews"
+              >
                 {selectedProduct.review_count > 0 ? (
                   <>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#f59e0b', fontSize: '14px', fontWeight: '800' }}>
                       <span>★</span>
                       <span style={{ color: '#1e293b' }}>{Number(selectedProduct.rating).toFixed(1)}</span>
                     </div>
-                    <span style={{ color: '#64748b', fontSize: '12px', fontWeight: '600' }}>
+                    <span style={{ color: '#64748b', fontSize: '12px', fontWeight: '600', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
                       ({selectedProduct.review_count} Verified {selectedProduct.review_count === 1 ? 'Review' : 'Reviews'})
                     </span>
                   </>
                 ) : (
-                  <span style={{ color: '#64748b', fontSize: '12px', fontWeight: '600' }}>
+                  <span style={{ color: '#64748b', fontSize: '12px', fontWeight: '600', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
                     No reviews yet
                   </span>
                 )}

@@ -2401,7 +2401,7 @@ export default function AdminDashboard({ onNavigateHome }) {
                   </div>
                   <div style={{ background: themeCardBg, border: `1px solid ${themeBorder}`, borderRadius: '16px', padding: '18px' }}>
                     <div style={{ fontSize: '11px', fontWeight: '700', color: themeTextSoft, textTransform: 'uppercase' }}>Coverage</div>
-                    <div style={{ fontSize: '28px', fontWeight: '900', color: '#8f8269', margin: '6px 0 2px' }}>6 / 6 Products</div>
+                    <div style={{ fontSize: '28px', fontWeight: '900', color: '#8f8269', margin: '6px 0 2px' }}>{products.length || 6} Products</div>
                     <div style={{ fontSize: '11.5px', color: '#059669', fontWeight: '600' }}>Real verified feedback</div>
                   </div>
                 </div>
@@ -2422,12 +2422,14 @@ export default function AdminDashboard({ onNavigateHome }) {
                       style={{ padding: '8px 12px', borderRadius: '10px', border: `1px solid ${themeBorder}`, background: themeBg, color: themeText, fontSize: '12.5px' }}
                     >
                       <option value="all">All Products ({reviews.length})</option>
-                      <option value="1">Orange Peel ({reviews.filter(r => Number(r.product_id) === 1).length})</option>
-                      <option value="2">Neem Leaf ({reviews.filter(r => Number(r.product_id) === 2).length})</option>
-                      <option value="3">Multani Mitti ({reviews.filter(r => Number(r.product_id) === 3).length})</option>
-                      <option value="4">Rice Powder ({reviews.filter(r => Number(r.product_id) === 4).length})</option>
-                      <option value="5">Ubtan Powder ({reviews.filter(r => Number(r.product_id) === 5).length})</option>
-                      <option value="6">Chocolate Wax Powder ({reviews.filter(r => Number(r.product_id) === 6).length})</option>
+                      {products.map(p => {
+                        const pCount = reviews.filter(r => String(r.product_id) === String(p.id) || r.product_name === p.name).length;
+                        return (
+                          <option key={p.id} value={String(p.id)}>
+                            {p.name} ({pCount})
+                          </option>
+                        );
+                      })}
                     </select>
                     <select
                       value={reviewRatingFilter}
