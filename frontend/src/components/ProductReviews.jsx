@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   Star, 
   ThumbsUp, 
@@ -12,7 +12,10 @@ import {
   Trash2, 
   AlertCircle, 
   LogIn,
-  Loader2
+  Loader2,
+  ExternalLink,
+  ArrowUpDown,
+  RefreshCw
 } from 'lucide-react';
 
 export default function ProductReviews({ 
@@ -20,10 +23,18 @@ export default function ProductReviews({
   productName, 
   user = null,
   apiBaseUrl = '/api',
+  isFullPage = false,
   onRequireLogin = null,
-  onReviewChanged = null
+  onReviewChanged = null,
+  onOpenFullReviews = null
 }) {
   const safeProductId = productId !== undefined && productId !== null ? productId : 1;
+
+  // Stored callback reference to avoid re-render loops
+  const onReviewChangedRef = useRef(onReviewChanged);
+  useEffect(() => {
+    onReviewChangedRef.current = onReviewChanged;
+  }, [onReviewChanged]);
 
   // Review list & pagination state
   const [reviews, setReviews] = useState([]);
@@ -33,6 +44,7 @@ export default function ProductReviews({
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [filterRating, setFilterRating] = useState('all');
+  const [sortOption, setSortOption] = useState('recent');
   const [filteredTotal, setFilteredTotal] = useState(0);
 
   // Overall product stats
@@ -69,6 +81,9 @@ export default function ProductReviews({
   const [editError, setEditError] = useState('');
   const [deletingId, setDeletingId] = useState(null);
 
+  // Active fetch tracking ID to ignore stale responses
+  const activeFetchIdRef = useRef(0);
+
   // Helper to get fresh/stored customer token
   const getCustomerToken = useCallback(async () => {
     if (user?.token) return user.token;
@@ -98,8 +113,9 @@ export default function ProductReviews({
     return null;
   }, [user, apiBaseUrl]);
 
-  // Fetch initial page of reviews whenever productId or filterRating changes
-  const fetchInitialReviews = useCallback(async () => {
+  // Fetch initial page of reviews
+  const fetchInitialReviews = useCallback(async (prodId, rating, sort) => {
+    const fetchId = ++activeFetchIdRef.current;
     setLoading(true);
     setFetchError('');
     setPage(1);
@@ -109,8 +125,11 @@ export default function ProductReviews({
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const url = `${apiBaseUrl}/products/${encodeURIComponent(safeProductId)}/reviews?page=1&limit=10&rating=${filterRating}`;
+      const url = `${apiBaseUrl}/products/${encodeURIComponent(prodId)}/reviews?page=1&limit=10&rating=${rating}&sort=${sort}`;
       const res = await fetch(url, { headers });
+
+      // Stale request guard
+      if (fetchId !== activeFetchIdRef.current) return;
 
       if (res.ok) {
         const data = await res.json();
@@ -127,36 +146,43 @@ export default function ProductReviews({
           };
           setStats(newStats);
 
-          if (onReviewChanged) {
-            onReviewChanged({
+          // Notify parent without re-triggering this effect
+          if (onReviewChangedRef.current) {
+            onReviewChangedRef.current({
               total: newStats.total,
-              average: newStats.average
+              average: newStats.average,
+              productId: safeProductId
             });
           }
         } else {
+          setFetchError(data.error || 'Failed to load reviews.');
           setReviews([]);
           setHasMore(false);
           setFilteredTotal(0);
         }
       } else {
-        setFetchError('Failed to load reviews from server.');
+        setFetchError('Unable to load reviews. Please verify your connection.');
         setReviews([]);
         setHasMore(false);
       }
     } catch (err) {
-      console.warn('Error fetching reviews:', err.message);
-      setFetchError('Network error while loading reviews.');
-      setReviews([]);
-      setHasMore(false);
+      if (fetchId === activeFetchIdRef.current) {
+        console.warn('Review fetch network error:', err.message);
+        setFetchError('Network error while connecting to review server.');
+        setReviews([]);
+        setHasMore(false);
+      }
     } finally {
-      setLoading(false);
+      if (fetchId === activeFetchIdRef.current) {
+        setLoading(false);
+      }
     }
-  }, [safeProductId, filterRating, apiBaseUrl, getCustomerToken, onReviewChanged]);
+  }, [apiBaseUrl, getCustomerToken]);
 
-  // Load reviews on mount or when productId/filter changes
+  // Load reviews on mount or whenever product, filter or sort changes
   useEffect(() => {
-    fetchInitialReviews();
-  }, [fetchInitialReviews]);
+    fetchInitialReviews(safeProductId, filterRating, sortOption);
+  }, [safeProductId, filterRating, sortOption, fetchInitialReviews]);
 
   // Fetch next page when user clicks "Load More Reviews"
   const handleLoadMore = async () => {
@@ -169,7 +195,7 @@ export default function ProductReviews({
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const nextPage = page + 1;
-      const url = `${apiBaseUrl}/products/${encodeURIComponent(safeProductId)}/reviews?page=${nextPage}&limit=10&rating=${filterRating}`;
+      const url = `${apiBaseUrl}/products/${encodeURIComponent(safeProductId)}/reviews?page=${nextPage}&limit=10&rating=${filterRating}&sort=${sortOption}`;
       const res = await fetch(url, { headers });
 
       if (res.ok) {
@@ -192,7 +218,7 @@ export default function ProductReviews({
     }
   };
 
-  // Check if current user has already submitted a review for this product
+  // Check if current user has already submitted a review
   const userExistingReview = useMemo(() => {
     const currentId = user?.id || (() => {
       try {
@@ -265,7 +291,7 @@ export default function ProductReviews({
       if (res.ok && data.success) {
         setFormSuccess('Thank you! Your verified review has been published successfully.');
         setFormData({ rating: 5, title: '', review_text: '' });
-        await fetchInitialReviews();
+        await fetchInitialReviews(safeProductId, filterRating, sortOption);
         setTimeout(() => {
           setShowWriteForm(false);
           setFormSuccess('');
@@ -328,7 +354,7 @@ export default function ProductReviews({
       const data = await res.json();
       if (res.ok && data.success) {
         setEditingReview(null);
-        await fetchInitialReviews();
+        await fetchInitialReviews(safeProductId, filterRating, sortOption);
       } else {
         setEditError(data.error || 'Failed to update review.');
       }
@@ -357,7 +383,7 @@ export default function ProductReviews({
 
       if (res.ok) {
         if (editingReview?.id === reviewId) setEditingReview(null);
-        await fetchInitialReviews();
+        await fetchInitialReviews(safeProductId, filterRating, sortOption);
       } else {
         const data = await res.json();
         alert(data.error || 'Could not delete review.');
@@ -423,13 +449,17 @@ export default function ProductReviews({
     <div 
       id="product-reviews-section" 
       className="product-reviews-container" 
-      style={{ marginTop: '28px', paddingTop: '24px', borderTop: '1px solid var(--cream-deep, #e2e8f0)' }}
+      style={{ 
+        marginTop: isFullPage ? '0' : '28px', 
+        paddingTop: isFullPage ? '0' : '24px', 
+        borderTop: isFullPage ? 'none' : '1px solid var(--cream-deep, #e2e8f0)' 
+      }}
     >
       {/* Header Row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: 'var(--ink, #1e293b)' }}>
+            <h3 style={{ margin: 0, fontSize: isFullPage ? '22px' : '18px', fontWeight: '800', color: 'var(--ink, #1e293b)' }}>
               Customer Reviews &amp; Ratings
             </h3>
             {stats.total > 0 && (
@@ -439,12 +469,35 @@ export default function ProductReviews({
             )}
           </div>
           <p style={{ margin: '4px 0 0', fontSize: '12.5px', color: 'var(--ink-soft, #64748b)' }}>
-            Real feedback from verified Krishiv Corporation customers
+            Real customer feedback for {productName}
           </p>
         </div>
 
-        {/* Action Button */}
-        <div>
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {!isFullPage && onOpenFullReviews && (
+            <button
+              onClick={onOpenFullReviews}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                background: 'transparent',
+                color: '#8f8269',
+                border: '1px solid #cbd5e1',
+                padding: '7px 12px',
+                borderRadius: '8px',
+                fontWeight: '700',
+                fontSize: '12px',
+                cursor: 'pointer'
+              }}
+              title="Open full dedicated review page"
+            >
+              <ExternalLink size={13} />
+              Full Page View
+            </button>
+          )}
+
           {userExistingReview ? (
             <button
               onClick={() => handleStartEdit(userExistingReview)}
@@ -855,63 +908,119 @@ export default function ProductReviews({
         </form>
       )}
 
-      {/* Filter Tabs (When reviews exist) */}
+      {/* Filter and Sort Toolbar (When reviews exist) */}
       {stats.total > 0 && (
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', overflowX: 'auto', paddingBottom: '4px' }}>
-          <button
-            onClick={() => setFilterRating('all')}
-            style={{
-              padding: '6px 14px',
-              borderRadius: '20px',
-              border: filterRating === 'all' ? '1px solid #8f8269' : '1px solid #e2e8f0',
-              background: filterRating === 'all' ? '#8f8269' : '#ffffff',
-              color: filterRating === 'all' ? '#ffffff' : '#475569',
-              fontSize: '11.5px',
-              fontWeight: '700',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            All Reviews ({stats.total})
-          </button>
-          {[5, 4, 3, 2, 1].map(s => {
-            const count = stats.breakdown[s] || 0;
-            if (count === 0 && filterRating !== String(s)) return null;
-            return (
-              <button
-                key={s}
-                onClick={() => setFilterRating(String(s))}
-                style={{
-                  padding: '6px 14px',
-                  borderRadius: '20px',
-                  border: filterRating === String(s) ? '1px solid #8f8269' : '1px solid #e2e8f0',
-                  background: filterRating === String(s) ? '#8f8269' : '#ffffff',
-                  color: filterRating === String(s) ? '#ffffff' : '#475569',
-                  fontSize: '11.5px',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                {s} Stars ({count})
-              </button>
-            );
-          })}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          flexWrap: 'wrap', 
+          gap: '12px', 
+          marginBottom: '18px',
+          paddingBottom: '12px',
+          borderBottom: '1px solid #e2e8f0'
+        }}>
+          {/* Star Filter Tabs */}
+          <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
+            <button
+              onClick={() => setFilterRating('all')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '20px',
+                border: filterRating === 'all' ? '1.5px solid #8f8269' : '1px solid #e2e8f0',
+                background: filterRating === 'all' ? '#8f8269' : '#ffffff',
+                color: filterRating === 'all' ? '#ffffff' : '#475569',
+                fontSize: '11.5px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              All ({stats.total})
+            </button>
+            {[5, 4, 3, 2, 1].map(s => {
+              const count = stats.breakdown[s] || 0;
+              if (count === 0 && filterRating !== String(s)) return null;
+              return (
+                <button
+                  key={s}
+                  onClick={() => setFilterRating(String(s))}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '20px',
+                    border: filterRating === String(s) ? '1.5px solid #8f8269' : '1px solid #e2e8f0',
+                    background: filterRating === String(s) ? '#8f8269' : '#ffffff',
+                    color: filterRating === String(s) ? '#ffffff' : '#475569',
+                    fontSize: '11.5px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {s} ★ ({count})
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Sort Control */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ArrowUpDown size={13} color="#64748b" />
+            <select
+              value={sortOption}
+              onChange={e => setSortOption(e.target.value)}
+              style={{
+                padding: '6px 10px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                background: '#ffffff',
+                fontSize: '11.5px',
+                fontWeight: '600',
+                color: '#334155',
+                cursor: 'pointer'
+              }}
+              aria-label="Sort customer reviews"
+            >
+              <option value="recent">Most Recent</option>
+              <option value="highest">Highest Rating</option>
+              <option value="lowest">Lowest Rating</option>
+              <option value="helpful">Most Helpful</option>
+            </select>
+          </div>
         </div>
       )}
 
-      {/* Reviews List & Empty State */}
+      {/* Reviews List / Loading / Error / Empty States */}
       {loading ? (
-        <div style={{ padding: '36px', textAlign: 'center', color: '#64748b', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-          <Loader2 size={16} className="animate-spin" />
-          <span>Loading customer reviews...</span>
+        <div style={{ padding: '36px', textAlign: 'center', color: '#64748b', fontSize: '13px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+          <Loader2 size={24} color="#8f8269" className="animate-spin" />
+          <span style={{ fontWeight: '600' }}>Loading customer reviews...</span>
         </div>
       ) : fetchError ? (
-        <div style={{ padding: '24px', textAlign: 'center', color: '#dc2626', fontSize: '13px', background: '#fee2e2', borderRadius: '12px' }}>
-          {fetchError}
+        <div style={{ padding: '24px', textAlign: 'center', color: '#991b1b', fontSize: '13px', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: '12px' }}>
+          <p style={{ margin: '0 0 10px', fontWeight: '700' }}>{fetchError}</p>
+          <button
+            onClick={() => fetchInitialReviews(safeProductId, filterRating, sortOption)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 16px',
+              borderRadius: '8px',
+              background: '#991b1b',
+              color: '#ffffff',
+              border: 'none',
+              fontSize: '12px',
+              fontWeight: '700',
+              cursor: 'pointer'
+            }}
+          >
+            <RefreshCw size={13} />
+            Try Again
+          </button>
         </div>
       ) : stats.total === 0 ? (
-        /* Empty State (Exact user requirement string) */
+        /* Empty State */
         <div style={{
           background: '#f8fafc',
           border: '1.5px dashed #cbd5e1',
@@ -962,7 +1071,7 @@ export default function ProductReviews({
         </div>
       ) : reviews.length === 0 ? (
         <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', fontSize: '12.5px', background: '#f8fafc', borderRadius: '12px' }}>
-          No {filterRating}-star reviews yet for this product.
+          No {filterRating}-star reviews found matching the selected filter.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -1170,7 +1279,7 @@ export default function ProductReviews({
         </div>
       )}
 
-      {/* Indicator when all reviews are loaded */}
+      {/* All Loaded Indicator */}
       {!hasMore && reviews.length > 0 && reviews.length === filteredTotal && (
         <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '11.5px', color: '#94a3b8' }}>
           ✓ Showing all {reviews.length} available reviews

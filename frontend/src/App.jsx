@@ -40,6 +40,7 @@ const getInitialPage = () => {
   if (pathname === '/payments' || pageParam === 'payments') return 'payments';
   if (pathname === '/settings' || pageParam === 'settings') return 'settings';
   if (pathname === '/product-details' || pageParam === 'product-details') return 'product-details';
+  if (pathname.includes('/reviews') || (pathname.startsWith('/product/') && pathname.endsWith('/reviews')) || pageParam === 'product-reviews') return 'product-reviews';
 
   return 'home';
 };
@@ -361,6 +362,11 @@ export default function App() {
       case 'payments': return '/payments';
       case 'settings': return '/settings';
       case 'product-details': return prod ? `/product-details?id=${prod.id}` : '/';
+      case 'product-reviews': {
+        const p = prod || params.product;
+        const slug = p ? (p.name ? p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : p.id) : (params.id || 'orange-peel');
+        return `/product/${slug}/reviews`;
+      }
       case 'admin': return '/admin';
       default: return '/';
     }
@@ -573,6 +579,18 @@ export default function App() {
       if ((initialPage === 'product-details' || window.location.pathname === '/product-details') && products.length > 0) {
         const found = products.find(p => String(p.id) === String(initialId));
         if (found) setSelectedProduct(found);
+      } else if ((initialPage === 'product-reviews' || window.location.pathname.includes('/reviews')) && products.length > 0) {
+        const match = window.location.pathname.match(/\/product\/([^\/]+)\/reviews/);
+        const slug = match ? match[1] : (params.get('id') || params.get('product'));
+        if (slug) {
+          const found = products.find(p => {
+            const pSlug = p.name ? p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : String(p.id);
+            return pSlug === slug || String(p.id) === slug || (p._id && String(p._id) === slug);
+          });
+          if (found) setSelectedProduct(found);
+        } else if (!selectedProduct) {
+          setSelectedProduct(products[0]);
+        }
       } else if (initialPage === 'order-details' || initialPage === 'order-success' || initialPage === 'track-order' || window.location.pathname.includes('order')) {
         let found = userOrders.find(o => String(o.id) === String(initialId) || String(o._id) === String(initialId));
         if (!found) {
@@ -780,6 +798,37 @@ export default function App() {
       setLoading(false);
     }
   };
+
+  // Memoized review sync handler to update product ratings and review count across the app
+  const handleReviewChanged = useCallback(({ total, average, productId: changedId }) => {
+    setProducts(prev => {
+      let hasChange = false;
+      const next = prev.map(p => {
+        const matches = changedId 
+          ? (String(p.id) === String(changedId) || (p._id && String(p._id) === String(changedId)))
+          : (selectedProduct && (String(p.id) === String(selectedProduct.id) || (p._id && String(p._id) === String(selectedProduct._id))));
+        if (matches) {
+          if (p.rating === average && p.review_count === total) return p;
+          hasChange = true;
+          return { ...p, rating: average, review_count: total };
+        }
+        return p;
+      });
+      return hasChange ? next : prev;
+    });
+
+    setSelectedProduct(prev => {
+      if (!prev) return null;
+      const matches = changedId 
+        ? (String(prev.id) === String(changedId) || (prev._id && String(prev._id) === String(changedId)))
+        : true;
+      if (matches) {
+        if (prev.rating === average && prev.review_count === total) return prev;
+        return { ...prev, rating: average, review_count: total };
+      }
+      return prev;
+    });
+  }, [selectedProduct]);
 
   // Sync Cart to Server/Local DB if logged in
   const syncCart = async (updatedCart) => {
@@ -2486,6 +2535,113 @@ export default function App() {
               </div>
             );
           }
+        })()}
+
+        {/* PAGE: DEDICATED CUSTOMER REVIEWS PAGE (/product/:slug/reviews) */}
+        {page === 'product-reviews' && (() => {
+          let activeProd = selectedProduct;
+          if (!activeProd && products.length > 0) {
+            const match = typeof window !== 'undefined' ? window.location.pathname.match(/\/product\/([^\/]+)\/reviews/) : null;
+            const slug = match ? match[1] : null;
+            if (slug) {
+              activeProd = products.find(p => {
+                const pSlug = p.name ? p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : String(p.id);
+                return pSlug === slug || String(p.id) === slug || (p._id && String(p._id) === slug);
+              });
+            }
+            if (!activeProd) activeProd = products[0];
+          }
+
+          if (!activeProd) {
+            return (
+              <div style={{ maxWidth: '1000px', margin: '60px auto', padding: '32px', textAlign: 'center' }}>
+                <p style={{ color: '#475569', fontSize: '15px' }}>Loading product details...</p>
+                <button onClick={() => changePage('home')} className="btn-secondary" style={{ marginTop: '16px' }}>Return to Shop</button>
+              </div>
+            );
+          }
+
+          return (
+            <div className="product-reviews-page" style={{ maxWidth: '1100px', margin: '0 auto', padding: '24px 16px' }}>
+              {/* Back navigation & breadcrumb */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', fontSize: '14px' }}>
+                <button 
+                  onClick={() => {
+                    setSelectedProduct(activeProd);
+                    changePage('category');
+                  }}
+                  className="btn-secondary"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', fontSize: '13px' }}
+                >
+                  <ArrowLeft size={16} /> Back to Products
+                </button>
+                <span style={{ color: '#94a3b8' }}>/</span>
+                <span style={{ fontWeight: 600, color: 'var(--ink)' }}>{activeProd.name} Customer Reviews</span>
+              </div>
+
+              {/* Product header summary banner */}
+              <div className="glass-panel" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '20px', padding: '20px 24px', borderRadius: '16px', marginBottom: '28px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                  <img 
+                    src={activeProd.image_url || activeProd.image || '/images/orange_peel.png'} 
+                    alt={activeProd.name} 
+                    style={{ width: '80px', height: '80px', objectFit: 'contain', borderRadius: '12px', background: '#fff', border: '1px solid rgba(0,0,0,0.06)' }} 
+                  />
+                  <div>
+                    <div style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--sage)', fontWeight: 700 }}>
+                      {activeProd.tag || activeProd.category || 'Krishiv Pure Organic'}
+                    </div>
+                    <h1 style={{ fontSize: '22px', fontWeight: 800, margin: '4px 0', color: 'var(--ink)' }}>
+                      {activeProd.name}
+                    </h1>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '14px', marginTop: '4px' }}>
+                      <span style={{ fontWeight: 800, color: 'var(--ink)', fontSize: '17px' }}>₹{activeProd.price}</span>
+                      {Number(activeProd.original_price) > Number(activeProd.price) && (
+                        <span style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: '13px' }}>₹{activeProd.original_price}</span>
+                      )}
+                      <span style={{ color: activeProd.stock > 0 ? '#10b981' : '#ef4444', fontWeight: 600, fontSize: '12px' }}>
+                        {activeProd.stock > 0 ? 'In Stock' : 'Out of Stock'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button 
+                    onClick={() => {
+                      setSelectedProduct(activeProd);
+                    }}
+                    className="btn-secondary"
+                    style={{ padding: '10px 16px', fontSize: '13px' }}
+                  >
+                    View Product Details
+                  </button>
+                  <button 
+                    onClick={() => addToCart(activeProd)}
+                    disabled={isOutOfStock(activeProd)}
+                    className="btn-primary"
+                    style={{ padding: '10px 18px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                  >
+                    <ShoppingBag size={16} /> Add to Cart
+                  </button>
+                </div>
+              </div>
+
+              {/* Main Reviews Component in full-page mode */}
+              <ProductReviews
+                productId={activeProd.id}
+                productName={activeProd.name}
+                user={user}
+                apiBaseUrl={API_BASE_URL}
+                isFullPage={true}
+                onRequireLogin={() => {
+                  setRedirectAfterLogin('product-reviews');
+                  changePage('login');
+                }}
+                onReviewChanged={handleReviewChanged}
+              />
+            </div>
+          );
         })()}
 
         {/* PAGE 3: CUSTOMER CARE PAGE */}
@@ -4609,16 +4765,13 @@ export default function App() {
                   apiBaseUrl={API_BASE_URL}
                   onRequireLogin={() => {
                     setRedirectAfterLogin('product-details');
-                    changePage('auth');
+                    changePage('login');
                   }}
-                  onReviewChanged={({ total, average }) => {
-                    setProducts(prev => prev.map(p => {
-                      if (String(p.id) === String(selectedProduct.id)) {
-                        return { ...p, rating: average, review_count: total };
-                      }
-                      return p;
-                    }));
-                    setSelectedProduct(prev => prev ? { ...prev, rating: average, review_count: total } : null);
+                  onReviewChanged={handleReviewChanged}
+                  onOpenFullReviews={() => {
+                    const prod = selectedProduct;
+                    setSelectedProduct(null);
+                    changePage('product-reviews', { product: prod, id: prod.id });
                   }}
                 />
               </div>

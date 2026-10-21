@@ -4597,10 +4597,22 @@ app.get('/api/products/:id/reviews', async (req, res) => {
 
     // Optional rating filter (5, 4, 3, 2, 1)
     const ratingFilter = req.query.rating;
-    const filteredList = (ratingFilter && ratingFilter !== 'all')
+    let filteredList = (ratingFilter && ratingFilter !== 'all')
         ? allApprovedReviews.filter(r => Math.floor(Number(r.rating)) === Number(ratingFilter))
-        : allApprovedReviews;
+        : [...allApprovedReviews];
     const filteredTotal = filteredList.length;
+
+    // Sorting: recent (default), highest, lowest, helpful
+    const sortParam = req.query.sort || 'recent';
+    if (sortParam === 'highest') {
+        filteredList.sort((a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0) || new Date(b.created_at) - new Date(a.created_at));
+    } else if (sortParam === 'lowest') {
+        filteredList.sort((a, b) => (Number(a.rating) || 0) - (Number(b.rating) || 0) || new Date(b.created_at) - new Date(a.created_at));
+    } else if (sortParam === 'helpful') {
+        filteredList.sort((a, b) => (Number(b.helpful_count) || 0) - (Number(a.helpful_count) || 0) || new Date(b.created_at) - new Date(a.created_at));
+    } else {
+        filteredList.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
 
     // Pagination
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -4637,6 +4649,7 @@ app.get('/api/products/:id/reviews', async (req, res) => {
         average_rating: average,
         distribution,
         filtered_total: filteredTotal,
+        sort: sortParam,
         page,
         limit,
         total_pages: totalPages,
